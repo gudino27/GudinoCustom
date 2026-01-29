@@ -1,6 +1,7 @@
 import "../css/sms-compliance.css";
 import Collapsible from "../ui/Collapsible";
 import Navigation from "../ui/Navigation";
+import Footer from "../ui/Footer";
 import SEO from "../ui/SEO";
 import { useLanguage } from "../../contexts/LanguageContext";
 
@@ -184,6 +185,7 @@ const WhyChooseUs = () => {
       </div>
       <div style={{ height: "3vh" }}></div>
       </div>
+      <Footer />
     </>
   );
 };

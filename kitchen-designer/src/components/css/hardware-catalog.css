@@ -1,0 +1,98 @@
+/* Hardware Catalog Component Styles */
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Custom scrollbar styling - sleek and minimal */
+.pdf-scroll-container::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.pdf-scroll-container::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 8px;
+  margin: 4px 0;
+}
+
+.pdf-scroll-container::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 8px;
+  border: 2px solid rgb(110, 110, 110);
+  transition: background 0.2s ease;
+}
+
+.pdf-scroll-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.pdf-scroll-container::-webkit-scrollbar-thumb:active {
+  background: rgba(0, 0, 0, 0.5);
+}
+
+/* Firefox scrollbar styling */
+.pdf-scroll-container {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.25) rgba(0, 0, 0, 0.05);
+}
+
+/* Smooth scrolling */
+.pdf-scroll-container {
+  scroll-behavior: smooth;
+}
+
+/* Mobile responsive adjustments */
+@media (max-width: 768px) {
+  .catalog-spacer {
+    height: 0.5vh !important;
+  }
+
+  .catalog-container {
+    padding: 0 0.25rem !important;
+  }
+
+  .pdf-scroll-container {
+    max-height: 93vh !important;
+    gap: 1rem !important;
+    padding: 0.5rem 0 !important;
+    margin-bottom: 0.5rem !important;
+  }
+
+  .pdf-page-canvas {
+    max-width: 98% !important;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3) !important;
+  }
+
+  .pdf-scroll-container::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .pdf-scroll-container::-webkit-scrollbar-thumb {
+    border: 1px solid rgb(110, 110, 110);
+  }
+}
+
+/* Extra small mobile devices */
+@media (max-width: 480px) {
+  .catalog-spacer {
+    height: 0.25vh !important;
+  }
+
+  .catalog-container {
+    padding: 0 !important;
+  }
+
+  .pdf-scroll-container {
+    max-height: 95vh !important;
+    border-radius: 0 !important;
+    gap: 0.75rem !important;
+    padding: 0.25rem 0 !important;
+    margin-bottom: 0 !important;
+  }
+
+  .pdf-page-canvas {
+    max-width: 100% !important;
+    border-radius: 0 !important;
+  }
+}

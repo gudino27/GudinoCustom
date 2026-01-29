@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import "./css/sms-compliance.css";
 import WebsitePrivacy from "./WebsitePrivacy";
 import Navigation from "./ui/Navigation";
+import Footer from "./ui/Footer";
 import Collapsible from "./ui/Collapsible";
 import { useLanguage } from "../contexts/LanguageContext";
 
@@ -294,6 +295,7 @@ const SmsCompliance = ({ defaultTab = "consent" }) => {
         <div className="sms-content">{renderContent()}</div>
       </div>
       <div style={{ height: "2vh" }}></div>
+      <Footer />
     </div>
   );
 };

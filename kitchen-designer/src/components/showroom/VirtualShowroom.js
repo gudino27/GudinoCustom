@@ -4,6 +4,7 @@ import { useLanguage } from '../../contexts/LanguageContext';
 import translations from '../../utils/translations';
 import ShowroomHotspot from './ShowroomHotspot';
 import Navigation from '../ui/Navigation';
+import Footer from '../ui/Footer';
 
 // Lazy load Three.js viewer to reduce initial bundle size
 const ThreeShowroomViewer = lazy(() => import('./ThreeShowroomViewer'));
@@ -214,6 +215,7 @@ const VirtualShowroom = () => {
           />
         )}
       </div>
+      <Footer />
     </>
   );
 };

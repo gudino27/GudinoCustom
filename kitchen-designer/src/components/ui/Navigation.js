@@ -121,7 +121,7 @@ const Navigation = () => {
                         <p>Contact</p>
                     </Link>
 
-                    <div className={`nav-item dropdown ${isActive('/cabinet-care') || isActive('/why-choose-us') || isActive('/book-appointment') ? 'active' : ''} ${isDropdownOpen ? 'show' : ''}`} style={{paddingRight:'30px'}}>
+                    <div className={`nav-item dropdown ${isActive('/cabinet-care') || isActive('/why-choose-us') || isActive('/book-appointment') || isActive('/hardware-catalog') ? 'active' : ''} ${isDropdownOpen ? 'show' : ''}`} style={{paddingRight:'30px'}}>
                         <button
                             className="nav-link dropdown-toggle text-white mx-3"
                             onClick={toggleDropdown}
@@ -133,6 +133,11 @@ const Navigation = () => {
                             <li>
                                 <Link className="dropdown-item text-left" to="/cabinet-care" onClick={closeDropdown}style={{border:"1px solid #ffffff8a",textAlign:"center"}}>
                                     Cabinet Care
+                                </Link>
+                            </li>
+                            <li>
+                                <Link className="dropdown-item text-center" to="/hardware-catalog" onClick={closeDropdown}style={{border:"1px solid #ffffff8a",textAlign:"center"}}>
+                                    Hardware Catalog
                                 </Link>
                             </li>
                             <li>

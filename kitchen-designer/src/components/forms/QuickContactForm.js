@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Upload, X, Image as ImageIcon, CheckCircle } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import Navigation from '../ui/Navigation';
+import Footer from '../ui/Footer';
 import '../css/testimonial-form.css';
 import { color } from 'three/src/nodes/TSL.js';
 
@@ -194,7 +195,7 @@ const QuickContactForm = ({ onBack }) => {
 
   if (submitted) {
     return (
-      <div className="min-h-screen bg-gray-50 ">
+      <div style={{ minHeight: "100vh", background: "rgb(110,110,110)" }}>
         <Navigation />
         <div className="testimonial-container">
           <div className="testimonial-form-card">
@@ -222,14 +223,16 @@ const QuickContactForm = ({ onBack }) => {
             </button>
           </div>
         </div>
+        <Footer />
       </div>
     );
   }
 
   return (
-    <>
+    <div style={{ minHeight: "100vh", background: "rgb(110,110,110)", paddingBottom: "2rem" }}>
       <Navigation />
-      <div className="testimonial-container my-12">
+      <div style={{ height: "2vh" }}></div>
+      <div className="testimonial-container">
         <div className="testimonial-form-card">
           <h2 className="testimonial-form-title text-4xl mb-6">
             {currentLanguage === 'es'
@@ -446,7 +449,8 @@ const QuickContactForm = ({ onBack }) => {
           </form>
         </div>
       </div>
-    </>
+      <Footer />
+    </div>
   );
 };
 

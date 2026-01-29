@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import Navigation from '../ui/Navigation';
+import Footer from '../ui/Footer';
 import SEO from '../ui/SEO';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'https://api.gudinocustom.com';
@@ -356,6 +357,7 @@ const ProjectTimeline = () => {
           </div>
         </div>
       </div>
+      <Footer />
     </>
   );
 };

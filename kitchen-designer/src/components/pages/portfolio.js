@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import "../css/portfolio.css";
 import Navigation from "../ui/Navigation";
+import Footer from "../ui/Footer";
 import SEO from "../ui/SEO";
 import { useLanguage } from "../../contexts/LanguageContext";
 import { useAnalytics } from "../../hooks/useAnalytics";
@@ -604,7 +605,8 @@ const Portfolio = () => {
 
       {/* Instagram Feed Section */}
       <InstagramFeed limit={6} showTitle={true} />
-      
+
+      <Footer />
     </>
   );
 };

@@ -34,6 +34,10 @@ const Footer = () => {
           <Link to="/cabinet-Care" className="footer-link">
             {t('footer.cabinetCare')}
           </Link>
+          <span className="footer-separator">|</span>
+          <Link to="/hardware-catalog" className="footer-link">
+            Hardware Catalog
+          </Link>
         </div>
         
         

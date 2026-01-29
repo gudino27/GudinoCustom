@@ -3,6 +3,7 @@ import { Home, Bath } from "lucide-react";
 import MainNavBar from "../ui/Navigation";
 import { useLanguage } from "../../contexts/LanguageContext";
 import DesignerOrContactChoice from "../ui/DesignerOrContactChoice";
+import Footer from "../ui/Footer";
 const DimensionsSetup = ({
   activeRoom,
   switchRoom,
@@ -217,8 +218,11 @@ const DimensionsSetup = ({
           >
             <DesignerOrContactChoice className="flex-1" />
           </div>
+          
         </div>
       </div>
+      <Footer/>
+
     </>
   );
 };

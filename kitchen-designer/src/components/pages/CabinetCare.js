@@ -1,10 +1,23 @@
 import "../css/sms-compliance.css";
+import "../css/home.css";
 import Collapsible from "../ui/Collapsible";
 import Navigation from "../ui/Navigation";
+import Footer from "../ui/Footer";
 import SEO from "../ui/SEO";
+import { Download } from 'lucide-react';
 import { useLanguage } from "../../contexts/LanguageContext";
+
 const CabinetCare = () => {
   const { t } = useLanguage();
+
+  const handleDownload = () => {
+    const link = document.createElement('a');
+    link.href = '/documents/Cabinet_Care,Cleaning&Warranty_Guide.pdf';
+    link.download = 'Cabinet-Care-Guide.pdf';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
   return (
     <>
       <SEO
@@ -22,6 +35,8 @@ const CabinetCare = () => {
             <p>
               <em>{t("cabinetCare.intro")}</em>
             </p>
+
+            
 
             <Collapsible title={t("cabinetCare.maintenance.title")}>
               <p
@@ -477,10 +492,27 @@ const CabinetCare = () => {
                 </li>
               </ul>
             </Collapsible>
+
+            {/* Download Button at Bottom */}
+            <div className="feature-button" style={{ textAlign: "center", marginTop: "3rem" }}>
+              <button
+                onClick={handleDownload}
+                className="cta-button"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "0.75rem",
+                }}
+              >
+                <Download size={24} />
+                Download Complete Guide (PDF)
+              </button>
+            </div>
           </div>
         </div>
         <div style={{ height: "2vh" }}></div>
       </div>
+      <Footer />
     </>
   );
 };

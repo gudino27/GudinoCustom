@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Upload, X, Image as ImageIcon, Copy, ExternalLink, Check } from 'lucide-react';
 import Navigation from '../ui/Navigation';
+import Footer from '../ui/Footer';
 import '../css/testimonial-form.css';
 
 
@@ -436,6 +437,7 @@ const TestimonialForm = () => {
                     </form>
                 </div>
             </div>
+            <Footer />
         </>
     );
 };
