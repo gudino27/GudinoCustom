@@ -101,7 +101,36 @@ function validateMaterials(req, res, next) {
   next();
 }
 
+/**
+ * Sanitizes query string parameter to prevent type confusion attacks
+ * Rejects arrays/objects, validates string length
+ * @param {*} value - Query parameter value to sanitize
+ * @param {Object} options - Validation options
+ * @param {number} options.minLength - Minimum string length (default: 0)
+ * @param {number} options.maxLength - Maximum string length (default: 1000)
+ * @param {boolean} options.allowEmpty - Allow empty strings (default: false)
+ * @returns {string|null} - Sanitized string or null if invalid
+ */
+function sanitizeQueryString(value, options = {}) {
+  const { minLength = 0, maxLength = 1000, allowEmpty = false } = options;
+
+  // Reject arrays and objects (type confusion protection)
+  if (Array.isArray(value) || (typeof value === 'object' && value !== null)) {
+    return null;
+  }
+
+  // Convert to string
+  const str = value == null ? '' : String(value);
+
+  // Length validation
+  if (!allowEmpty && str.length === 0) return null;
+  if (str.length < minLength || str.length > maxLength) return null;
+
+  return str.trim();
+}
+
 module.exports = {
   validatePricing,
-  validateMaterials
+  validateMaterials,
+  sanitizeQueryString
 };

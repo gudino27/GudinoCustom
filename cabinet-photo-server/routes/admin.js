@@ -4,6 +4,7 @@ const express = require("express");
 const router = express.Router();
 const {getDb,userDb, invoiceDb} = require("../db-helpers");
 const { authenticateUser, requireRole } = require("../middleware/auth");
+const { sanitizeQueryString } = require("../middleware/validation");
 const { 
   twilioClient,
   sendSmsWithRouting,
@@ -757,8 +758,10 @@ router.get("/api/admin/clients", authenticateUser, async (req, res) => {
 
 router.get("/api/admin/clients/search", authenticateUser, async (req, res) => {
   try {
-    const { q } = req.query;
-    if (!q || q.length < 2) {
+    // Security: Sanitize query parameter to prevent type confusion attacks
+    // Rejects arrays/objects that could bypass length validation
+    const q = sanitizeQueryString(req.query.q, { minLength: 2, maxLength: 100 });
+    if (!q) {
       return res.json([]);
     }
     const clients = await invoiceDb.searchClients(q);

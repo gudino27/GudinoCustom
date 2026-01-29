@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const { authenticateUser, requireRole } = require("../../middleware/auth");
+const { sanitizeQueryString } = require("../../middleware/validation");
 const { getDb, queueDbOperation, invoiceDb } = require("../../db-helpers");
 const {
   generatePdfWithRetry,
@@ -146,9 +147,11 @@ router.get("/clients", authenticateUser, async (req, res) => {
 // Admin endpoint - Search clients with debouncing support
 router.get("/clients/search", authenticateUser, async (req, res) => {
   try {
-    const { q } = req.query;
-    if (!q || q.length < 2) {
-      return res.json([]); // Return empty array for short queries
+    // Security: Sanitize query parameter to prevent type confusion attacks
+    // Rejects arrays/objects that could bypass length validation
+    const q = sanitizeQueryString(req.query.q, { minLength: 2, maxLength: 100 });
+    if (!q) {
+      return res.json([]); // Return empty array for invalid or short queries
     }
     const clients = await invoiceDb.searchClients(q);
     res.json(clients);

@@ -20,6 +20,9 @@ const {
 // Import database initialization
 const { initializeDatabase } = require("./init-database");
 
+// Import middleware
+const { globalLimiter } = require("./middleware/rate-limiters");
+
 // Import routes
 const photosRoutes = require("./routes/photos");
 const employeesRoutes = require("./routes/employees");
@@ -117,6 +120,10 @@ app.use("/api/analytics/time", (req, res, next) => {
   }
   next();
 });
+
+// Apply global rate limiting to all API routes
+// Protects against DoS attacks and general abuse (500 req/15min per IP)
+app.use('/api', globalLimiter);
 
 // Override Cross-Origin-Resource-Policy for static files to allow cross-origin access
 app.use(["/photos", "/testimonial-photos"], (req, res, next) => {

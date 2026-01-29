@@ -6,6 +6,7 @@ const bcrypt = require("bcryptjs");
 const rateLimit = require("express-rate-limit");
 const { userDb, getDb } = require("../db-helpers");
 const { authenticateUser } = require("../middleware/auth");
+const { passwordResetLimiter, authStrictLimiter, publicApiLimiter } = require("../middleware/rate-limiters");
 const { emailTransporter } = require("../utils/email");
 const { validatePasswordComplexity } = require("../utils/password-validation");
 const { handleError } = require("../utils/error-handler");
@@ -147,7 +148,7 @@ router.post("/refresh", async (req, res) => {
   }
 });
 // Password reset endpoints
-router.post("/forgot-password", async (req, res) => {
+router.post("/forgot-password", passwordResetLimiter, async (req, res) => {
   try {
     const { email } = req.body;
     if (!email) {
@@ -187,7 +188,7 @@ router.post("/forgot-password", async (req, res) => {
     handleError(error, "Failed to process password reset request", res, 500);
   }
 });
-router.post("/reset-password", async (req, res) => {
+router.post("/reset-password", passwordResetLimiter, async (req, res) => {
   try {
     const { token, password } = req.body;
     if (!token || !password) {
@@ -209,7 +210,7 @@ router.post("/reset-password", async (req, res) => {
     handleError(error, "Failed to reset password", res, 500);
   }
 });
-router.get("/validate-reset-token/:token", async (req, res) => {
+router.get("/validate-reset-token/:token", publicApiLimiter, async (req, res) => {
   try {
     const { token } = req.params;
     const resetRecord = await userDb.validatePasswordResetToken(token);
@@ -227,7 +228,7 @@ router.get("/validate-reset-token/:token", async (req, res) => {
 });
 
 // Force password change endpoint (no authentication required - special case for must_change_password)
-router.post("/change-password-required", async (req, res) => {
+router.post("/change-password-required", authStrictLimiter, async (req, res) => {
   const { username, currentPassword, newPassword } = req.body;
   const ipAddress = req.ip || req.connection.remoteAddress;
   const userAgent = req.headers['user-agent'];
@@ -299,7 +300,7 @@ router.post("/change-password-required", async (req, res) => {
 });
 
 // Regular password change endpoint (for authenticated users)
-router.post("/change-password", authenticateUser, async (req, res) => {
+router.post("/change-password", authenticateUser, authStrictLimiter, async (req, res) => {
   const { currentPassword, newPassword } = req.body;
 
   try {
