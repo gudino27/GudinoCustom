@@ -34,15 +34,24 @@ function generateInvitationToken() {
  * @param {string} platform - 'webapp' or 'ios'
  */
 function generateRegistrationLink(token, platform = 'webapp') {
-  const baseUrl = config.urls.adminUrl || 'https://gudinocustom.com';
-  
   if (platform === 'ios') {
     // Deep link for iOS app
     return `gcwadmin://register/${token}`;
   }
-  
-  // Web registration link
+
+  // Use frontendUrl for public registration routes (not admin panel)
+  const baseUrl = config.urls.frontendUrl || 'https://gudinocustom.com';
   return `${baseUrl}/register/${token}`;
+}
+
+/**
+ * Generate password reset link
+ * @param {string} token - Password reset token
+ */
+function generatePasswordResetLink(token) {
+  // Use frontendUrl for public password reset routes (not admin panel)
+  const baseUrl = config.urls.frontendUrl || 'https://gudinocustom.com';
+  return `${baseUrl}/reset-password?token=${token}`;
 }
 
 /**
@@ -344,6 +353,7 @@ async function cleanupExpiredInvitations(db) {
 module.exports = {
   generateInvitationToken,
   generateRegistrationLink,
+  generatePasswordResetLink,
   sendInvitation,
   sendInvitationEmail,
   sendInvitationSMS,

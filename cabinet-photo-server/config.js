@@ -113,7 +113,30 @@ const config = {
 
   // URLs
   urls: {
-    adminUrl: process.env.ADMIN_URL || 'http://localhost:3000',
+    adminUrl: (() => {
+      const url = process.env.ADMIN_URL || 'http://localhost:3000';
+
+      // Warn if ADMIN_URL includes a path that could cause routing issues
+      if (url.includes('/admin') && !url.endsWith('/admin')) {
+        console.warn('⚠️  WARNING: ADMIN_URL contains a path which may cause routing issues.');
+        console.warn('⚠️  Current value:', url);
+        console.warn('⚠️  Consider using FRONTEND_URL for public routes instead.');
+      }
+
+      return url;
+    })(),
+    frontendUrl: (() => {
+      const url = process.env.FRONTEND_URL || process.env.ADMIN_URL || 'http://localhost:3000';
+
+      // Warn if FRONTEND_URL includes paths
+      if (url.split('//')[1]?.includes('/')) {
+        console.warn('⚠️  WARNING: FRONTEND_URL should not include URL paths.');
+        console.warn('⚠️  Current value:', url);
+        console.warn('⚠️  URL generation for registration/password reset may fail.');
+      }
+
+      return url;
+    })(),
     apiUrl: process.env.API_URL || 'http://localhost:3001'
   }
 };

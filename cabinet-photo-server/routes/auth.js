@@ -10,6 +10,7 @@ const { passwordResetLimiter, authStrictLimiter, publicApiLimiter } = require(".
 const { emailTransporter } = require("../utils/email");
 const { validatePasswordComplexity } = require("../utils/password-validation");
 const { handleError } = require("../utils/error-handler");
+const { generatePasswordResetLink } = require("../services/notification-service");
 
 // Rate limiter for login endpoint - 5 attempts per 15 minutes
 const loginLimiter = rateLimit({
@@ -158,7 +159,7 @@ router.post("/forgot-password", passwordResetLimiter, async (req, res) => {
     // Always return success to prevent email enumeration
     if (resetData) {
       // Send email with reset link
-      const resetUrl = `https://gudinocustom.com/reset-password?token=${resetData.token}`;
+      const resetUrl = generatePasswordResetLink(resetData.token);
       const mailOptions = {
         from: process.env.EMAIL_FROM,
         to: resetData.user.email,
