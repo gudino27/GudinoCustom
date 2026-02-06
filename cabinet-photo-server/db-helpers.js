@@ -348,13 +348,16 @@ const employeeDb = {
 
     if (fields.length > 0) {
       values.push(id);
-      await db.run(
+      const result = await db.run(
         `UPDATE employees SET ${fields.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
         values
       );
+      await db.close();
+      return result.changes > 0;
     }
 
     await db.close();
+    return false;
   },
 
   async deleteEmployee(id) {

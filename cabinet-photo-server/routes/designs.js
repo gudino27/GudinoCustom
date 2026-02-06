@@ -11,6 +11,7 @@ const {uploadMemory } = require("../middleware/upload");
 const { emailTransporter } = require("../utils/email");
 const { sendSmsWithRouting } = require("../utils/sms");
 const { handleError } = require("../utils/error-handler");
+const { notifyDesignSubmitted } = require("../utils/push-notifications");
 
 // Rate limiter for design submissions (5 per 15 minutes per IP)
 const designSubmitLimiter = rateLimit({
@@ -190,6 +191,19 @@ router.post("/", designSubmitLimiter, uploadMemory.single("pdf"), async (req, re
       } catch (smsError) {
         console.error("⚠️  SMS routing error:", smsError.message);
       }
+    }
+
+    // Push notification for design submissions (to admin devices)
+    try {
+      await notifyDesignSubmitted({
+        clientName: designData.client_name,
+        totalPrice: designData.total_price,
+        contactPreference: designData.contact_preference,
+        designId
+      });
+      console.log('🔔 Design push notification sent to admins');
+    } catch (pushError) {
+      console.error('⚠️  Design push notification error:', pushError.message);
     }
 
     res.json({

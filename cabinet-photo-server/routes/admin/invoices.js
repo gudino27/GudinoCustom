@@ -94,7 +94,11 @@ router.get("/needing-reminders", authenticateUser, async (req, res) => {
   }
 });
 // Admin endpoint - Get invoice by ID
-router.get("/:id", authenticateUser, async (req, res) => {
+// Use next() for non-numeric IDs so named routes (clients, tax-rates, etc.) can match
+router.get("/:id", authenticateUser, async (req, res, next) => {
+  if (isNaN(req.params.id)) {
+    return next();
+  }
   try {
     const invoice = await invoiceDb.getInvoiceById(req.params.id);
     if (!invoice) {

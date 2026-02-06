@@ -2,9 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { User, Trash2, Edit2, Save, Plus, GripVertical, Mail, Phone, Calendar } from 'lucide-react';
 import { formatDatePacific } from '../../utils/dateUtils';
 import { useLanguage } from '../../contexts/LanguageContext';
+import sessionManager from '../utils/sessionManager';
 
 const EmployeeManager = () => {
   const { t } = useLanguage();
+  const getAuthHeaders = () => {
+    const session = sessionManager.getSession();
+    return session?.token ? { 'Authorization': `Bearer ${session.token}` } : {};
+  };
   const [employees, setEmployees] = useState([]);
   const [isAddingNew, setIsAddingNew] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -69,6 +74,7 @@ const EmployeeManager = () => {
 
       const response = await fetch(`${API_BASE}/api/employees`, {
         method: 'POST',
+        headers: getAuthHeaders(),
         body: formData
       });
 
@@ -114,6 +120,7 @@ const EmployeeManager = () => {
 
       const response = await fetch(`${API_BASE}/api/employees/${id}`, {
         method: 'PUT',
+        headers: getAuthHeaders(),
         body: formData
       });
 
@@ -140,7 +147,8 @@ const EmployeeManager = () => {
 
     try {
       const response = await fetch(`${API_BASE}/api/employees/${id}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: getAuthHeaders()
       });
 
       if (response.ok) {
@@ -186,7 +194,7 @@ const EmployeeManager = () => {
     try {
       const response = await fetch(`${API_BASE}/api/employees/reorder`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({ employeeIds })
       });
 

@@ -13,6 +13,7 @@ const {
   generateQuickQuoteAdminNotification,
 } = require("../utils/email");
 const { sendSmsWithRouting } = require("../utils/sms");
+const { notifyQuickQuoteSubmitted } = require("../utils/push-notifications");
 const PORT = process.env.PORT || 3001;
 
 // Configure multer for quick quote photo uploads (max 5 photos, 10MB each)
@@ -70,10 +71,10 @@ router.post("/api/contact/quick-quote", quickQuoteUpload.array("photos", 5), asy
     }
 
     // Validate project type
-    const validProjectTypes = ["kitchen", "bathroom", "custom"];
+    const validProjectTypes = ["kitchen", "bathroom", "custom", "new-construction", "remodel", "addition"];
     if (!validProjectTypes.includes(project_type)) {
       return res.status(400).json({
-        error: "Invalid project_type. Must be one of: kitchen, bathroom, custom",
+        error: "Invalid project_type. Must be one of: kitchen, bathroom, custom, new-construction, remodel, addition",
       });
     }
 
@@ -192,6 +193,18 @@ router.post("/api/contact/quick-quote", quickQuoteUpload.array("photos", 5), asy
       console.log(`📱 SMS notification sent to admin`);
     } catch (smsError) {
       console.error("Failed to send SMS notification:", smsError);
+    }
+
+    // Push notification for quick quote submissions
+    try {
+      await notifyQuickQuoteSubmitted({
+        clientName: client_name,
+        projectType: project_type,
+        submissionId,
+      });
+      console.log('🔔 Quick quote push notification sent to admins');
+    } catch (pushError) {
+      console.error('⚠️  Quick quote push notification error:', pushError.message);
     }
 
     // Return success response

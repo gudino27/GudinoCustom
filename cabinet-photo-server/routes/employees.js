@@ -10,7 +10,7 @@ const path = require("path");
 const fs = require("fs").promises;
 const { employeeDb } = require("../db-helpers");
 const { authenticateUser, requireRole } = require("../middleware/auth");
-const { upload } = require("../middleware/upload");
+const { uploadMemory } = require("../middleware/upload");
 const { handleError } = require("../utils/error-handler");
 const { validateFileUpload, generateSafeFilename } = require("../utils/file-validation");
 // Get all employees
@@ -50,7 +50,7 @@ router.get("/:id", authenticateUser, requireRole(['admin', 'super_admin']), asyn
   }
 });
 // Create new employee with photo upload
-router.post("", authenticateUser, requireRole(['admin', 'super_admin']), upload.single("photo"), async (req, res) => {
+router.post("", authenticateUser, requireRole(['admin', 'super_admin']), uploadMemory.single("photo"), async (req, res) => {
   try {
     let photoPath = null;
     let photoFilename = null;
@@ -63,7 +63,7 @@ router.post("", authenticateUser, requireRole(['admin', 'super_admin']), upload.
       }
 
       // Create employees directory
-      const employeesDir = path.join(__dirname, "uploads", "employees");
+      const employeesDir = path.join(__dirname, "..", "uploads", "employees");
       await fs.mkdir(employeesDir, { recursive: true });
       // Generate secure filename
       const uniqueName = generateSafeFilename(req.file, 'emp');
@@ -79,6 +79,7 @@ router.post("", authenticateUser, requireRole(['admin', 'super_admin']), upload.
       // Create thumbnail
       const thumbnailDir = path.join(
         __dirname,
+        "..",
         "uploads",
         "employees",
         "thumbnails"
@@ -139,7 +140,7 @@ router.put("/reorder", authenticateUser, requireRole(['admin', 'super_admin']), 
   }
 });
 // Update employee
-router.put("/:id", authenticateUser, requireRole(['admin', 'super_admin']), upload.single("photo"), async (req, res) => {
+router.put("/:id", authenticateUser, requireRole(['admin', 'super_admin']), uploadMemory.single("photo"), async (req, res) => {
   try {
     const employeeId = parseInt(req.params.id);
     const updates = {};
@@ -178,6 +179,7 @@ router.put("/:id", authenticateUser, requireRole(['admin', 'super_admin']), uplo
       if (currentEmployee && currentEmployee.photo_path) {
         const oldPhotoPath = path.join(
           __dirname,
+          "..",
           "uploads",
           currentEmployee.photo_path
         );
@@ -186,6 +188,7 @@ router.put("/:id", authenticateUser, requireRole(['admin', 'super_admin']), uplo
           // Also delete old thumbnail
           const oldThumbPath = path.join(
             __dirname,
+            "..",
             "uploads",
             "employees",
             "thumbnails",
@@ -197,7 +200,7 @@ router.put("/:id", authenticateUser, requireRole(['admin', 'super_admin']), uplo
         }
       }
       // Save new photo
-      const employeesDir = path.join(__dirname, "uploads", "employees");
+      const employeesDir = path.join(__dirname, "..", "uploads", "employees");
       await fs.mkdir(employeesDir, { recursive: true });
 
       const uniqueName = generateSafeFilename(req.file, 'emp');
@@ -212,6 +215,7 @@ router.put("/:id", authenticateUser, requireRole(['admin', 'super_admin']), uplo
       // Create thumbnail
       const thumbnailDir = path.join(
         __dirname,
+        "..",
         "uploads",
         "employees",
         "thumbnails"
@@ -261,12 +265,13 @@ router.delete("/:id", authenticateUser, requireRole(['admin', 'super_admin']), a
       // Get employee to delete photo
       const employee = await employeeDb.getEmployee(employeeId);
       if (employee && employee.photo_path) {
-        const photoPath = path.join(__dirname, "uploads", employee.photo_path);
+        const photoPath = path.join(__dirname, "..", "uploads", employee.photo_path);
         try {
           await fs.unlink(photoPath);
           // Delete thumbnail too
           const thumbPath = path.join(
             __dirname,
+            "..",
             "uploads",
             "employees",
             "thumbnails",
