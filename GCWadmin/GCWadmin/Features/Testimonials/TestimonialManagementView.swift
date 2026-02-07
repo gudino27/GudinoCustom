@@ -77,10 +77,10 @@ struct TestimonialManagementView: View {
 
     private var tabBar: some View {
         HStack(spacing: 0) {
-            tabButton("Testimonials", value: "testimonials", icon: "star.fill", count: viewModel.testimonials.count)
-            tabButton("Send Link", value: "send", icon: "paperplane.fill", count: nil)
+            tabButton("Reviews", value: "testimonials", icon: "star.fill", count: viewModel.testimonials.count)
+            tabButton("Send\nLink", value: "send", icon: "paperplane.fill", count: nil)
             tabButton("Tokens", value: "tokens", icon: "link", count: viewModel.tokens.count)
-            tabButton("Analytics", value: "analytics", icon: "chart.bar.fill", count: nil)
+            tabButton("Stats", value: "analytics", icon: "chart.bar.fill", count: nil)
         }
         .background(AppColors.gray200)
         .cornerRadius(8)
@@ -88,23 +88,26 @@ struct TestimonialManagementView: View {
 
     private func tabButton(_ label: String, value: String, icon: String, count: Int?) -> some View {
         Button(action: { selectedTab = value }) {
-            VStack(spacing: 2) {
-                HStack(spacing: 4) {
-                    Image(systemName: icon)
-                        .font(.system(size: 14))
-                    Text(label)
-                        .font(.subheadline)
-                        .fontWeight(selectedTab == value ? .semibold : .regular)
-                }
+            VStack(spacing: 3) {
+                Image(systemName: icon)
+                    .font(.system(size: 16))
+
+                Text(label)
+                    .font(.system(size: 11))
+                    .fontWeight(selectedTab == value ? .semibold : .regular)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+
                 if let count = count {
                     Text("\(count)")
-                        .font(.system(size: 14))
+                        .font(.system(size: 11))
                         .foregroundColor(selectedTab == value ? AppColors.blue : AppColors.textGray)
                 }
             }
             .foregroundColor(selectedTab == value ? AppColors.text : AppColors.textGray)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 10)
+            .padding(.vertical, 8)
             .background(selectedTab == value ? Color.white : Color.clear)
             .cornerRadius(8)
         }

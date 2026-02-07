@@ -265,6 +265,7 @@ struct CabinetPriceRow: View {
 
                 TextField("0.00", text: $priceText)
                     .font(AppTypography.body())
+                    .foregroundColor(AppColors.text)
                     .keyboardType(.decimalPad)
                     .multilineTextAlignment(.trailing)
                     .frame(width: 80)
@@ -613,6 +614,7 @@ struct ColorPriceRow: View {
 
                 TextField("0.00", text: $priceText)
                     .font(AppTypography.body())
+                    .foregroundColor(AppColors.text)
                     .keyboardType(.decimalPad)
                     .multilineTextAlignment(.trailing)
                     .frame(width: 80)
@@ -771,6 +773,7 @@ struct WallPriceRow: View {
 
                     TextField("0.00", text: $priceText)
                         .font(AppTypography.headline())
+                        .foregroundColor(AppColors.text)
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
                         .frame(width: 100)

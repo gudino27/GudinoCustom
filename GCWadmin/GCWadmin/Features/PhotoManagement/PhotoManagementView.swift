@@ -371,28 +371,33 @@ struct PhotoCardView: View {
                 }
 
                 // Photo/Video thumbnail
-                AsyncImage(url: URL(string: "\(APIConfig.baseURL)\(photo.thumbnail ?? photo.url)")) { phase in
-                    switch phase {
-                    case .empty:
-                        Color.gray.opacity(0.3)
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                    case .failure(let error):
-                        VStack {
-                            Image(systemName: "exclamationmark.triangle")
-                                .foregroundColor(.red)
-                            Text("Failed to load")
-                                .font(.caption)
-                                .foregroundColor(.red)
+                GeometryReader { geo in
+                    AsyncImage(url: URL(string: "\(APIConfig.baseURL)\(photo.thumbnail ?? photo.url)")) { phase in
+                        switch phase {
+                        case .empty:
+                            Color.gray.opacity(0.3)
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(width: geo.size.width, height: 160)
+                                .clipped()
+                        case .failure(let error):
+                            VStack {
+                                Image(systemName: "exclamationmark.triangle")
+                                    .foregroundColor(.red)
+                                Text("Failed to load")
+                                    .font(.caption)
+                                    .foregroundColor(.red)
+                            }
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .onAppear {
+                                print("❌ Image load failed for photo \(photo.id): \(error)")
+                                print("   URL: \(APIConfig.baseURL)\(photo.thumbnail ?? photo.url)")
+                            }
+                        @unknown default:
+                            Color.gray.opacity(0.3)
                         }
-                        .onAppear {
-                            print("❌ Image load failed for photo \(photo.id): \(error)")
-                            print("   URL: \(APIConfig.baseURL)\(photo.thumbnail ?? photo.url)")
-                        }
-                    @unknown default:
-                        Color.gray.opacity(0.3)
                     }
                 }
                 .frame(height: 160)
@@ -590,6 +595,7 @@ struct PhotoCardView: View {
             }
             .padding(AppSpacing.sm)
         }
+        .clipShape(RoundedRectangle(cornerRadius: AppRadius.xxl))
         .contentGlass()
         .confirmationDialog("Delete Photo", isPresented: $showDeleteConfirmation) {
             Button("Delete", role: .destructive) {

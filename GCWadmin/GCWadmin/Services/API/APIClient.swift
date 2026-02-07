@@ -28,7 +28,7 @@ enum APIEnvironment {
 
 enum APIConfig {
     // CHANGE THIS to switch between environments
-    static let environment: APIEnvironment = .development
+    static let environment: APIEnvironment = .production
 
     static var baseURL: String {
         environment.baseURL
