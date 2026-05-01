@@ -35,7 +35,9 @@ struct PriceManagementView: View {
                 }
                 .padding()
             }
+            .background(AppColors.background)
         }
+        .background(AppColors.background)
         .navigationTitle("Price Management")
         .navigationBarTitleDisplayMode(.inline)
         .task {

@@ -1,5 +1,5 @@
 // PDF GENERATION UTILITIES 
-const htmlPdf = require("html-pdf-node");
+const puppeteer = require("puppeteer");
 const fs = require("fs");
 const path = require("path");
 const { invoiceDb } = require("../db-helpers");
@@ -12,8 +12,23 @@ async function generatePdfWithRetry(htmlContent, options, maxRetries = 3) {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       console.log(`PDF generation attempt ${attempt}/${maxRetries}...`);
-      const file = { content: htmlContent };
-      pdfBuffer = await htmlPdf.generatePdf(file, options);
+      const browser = await puppeteer.launch({
+        args: options.args || [],
+        executablePath: options.executablePath || undefined,
+        headless: true
+      });
+      try {
+        const page = await browser.newPage();
+        await page.setContent(htmlContent, { waitUntil: 'networkidle0', timeout: options.timeout || 30000 });
+        pdfBuffer = await page.pdf({
+          format: options.format || 'A4',
+          margin: options.margin || options.border,
+          printBackground: options.printBackground !== false,
+          landscape: options.orientation === 'landscape'
+        });
+      } finally {
+        await browser.close();
+      }
       console.log(
         `PDF generated successfully on attempt ${attempt}, size: ${pdfBuffer.length} bytes`
       );

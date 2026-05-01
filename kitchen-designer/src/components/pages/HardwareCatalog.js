@@ -10,7 +10,7 @@ import { useLanguage } from "../../contexts/LanguageContext";
 import { Download, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
 
 // Configure PDF.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@5.7.284/build/pdf.worker.min.mjs`;
 
 const HardwareCatalog = () => {
   const { t } = useLanguage();

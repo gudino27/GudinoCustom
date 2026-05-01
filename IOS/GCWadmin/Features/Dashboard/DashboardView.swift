@@ -147,6 +147,8 @@ struct DashboardView: View {
     }
 
     // MARK: - Section Navigation
+    // Note: .navGlass removed — it was blurring scrolling content underneath,
+    // picking up colours from child views and making tabs shift appearance.
     private var sectionNavigation: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: AppSpacing.sm) {
@@ -167,7 +169,6 @@ struct DashboardView: View {
         }
         .frame(height: 60)
         .background(AppColors.primary)
-        .navGlass(cornerRadius: 0)
     }
 
     // MARK: - Content Area
@@ -193,7 +194,6 @@ struct DashboardView: View {
                 EmployeeManagementView()
             }
         case "timeclock":
-            // Full TimeClock feature
             TimeClockView()
         case "designs":
             NavigationStack {
@@ -236,7 +236,8 @@ struct DashboardView: View {
                 SmsRoutingView()
             }
         case "security":
-            NavigationStack { SecurityMonitorView()
+            NavigationStack {
+                SecurityMonitorView()
             }
         default:
             placeholderScrollView {
@@ -244,7 +245,7 @@ struct DashboardView: View {
             }
         }
     }
-    
+
     // MARK: - Placeholder ScrollView Wrapper
     private func placeholderScrollView<Content: View>(@ViewBuilder content: () -> Content) -> some View {
         ScrollView {
@@ -297,7 +298,6 @@ struct DashboardView: View {
 #Preview {
     let authManager = AuthManager()
 
-    // Simulate logged in user for preview
     return DashboardView()
         .environmentObject(authManager)
         .environmentObject(LanguageManager())

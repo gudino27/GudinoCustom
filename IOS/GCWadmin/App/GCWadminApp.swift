@@ -17,6 +17,19 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     ) -> Bool {
         // Set notification delegate for foreground handling
         UNUserNotificationCenter.current().delegate = self
+
+        // Prevent navigation bars from flashing white when scrolling
+        // inside dashboard sections (scroll edge appearance).
+        let appearance = UINavigationBarAppearance()
+        appearance.configureWithTransparentBackground()
+        appearance.backgroundColor = UIColor(AppColors.background)
+        appearance.titleTextAttributes = [.foregroundColor: UIColor(AppColors.text)]
+        appearance.largeTitleTextAttributes = [.foregroundColor: UIColor(AppColors.text)]
+
+        UINavigationBar.appearance().standardAppearance = appearance
+        UINavigationBar.appearance().scrollEdgeAppearance = appearance
+        UINavigationBar.appearance().compactAppearance = appearance
+
         return true
     }
 

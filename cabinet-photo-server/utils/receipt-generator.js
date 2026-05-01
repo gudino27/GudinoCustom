@@ -1,5 +1,5 @@
 // RECEIPT PDF GENERATOR UTILITY
-const htmlPdf = require('html-pdf-node');
+const puppeteer = require('puppeteer');
 const { invoiceDb } = require('../db-helpers');
 
 // Generate receipt PDF for a payment
@@ -222,8 +222,24 @@ async function generateReceiptPdf(paymentId, language = 'en') {
       executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined
     };
 
-    const file = { content: htmlContent };
-    const pdfBuffer = await htmlPdf.generatePdf(file, options);
+    const browser = await puppeteer.launch({
+      args: options.args || [],
+      executablePath: options.executablePath || undefined,
+      headless: true
+    });
+    let pdfBuffer;
+    try {
+      const page = await browser.newPage();
+      await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
+      pdfBuffer = await page.pdf({
+        format: options.format || 'A4',
+        margin: options.margin || options.border,
+        printBackground: options.printBackground !== false,
+        landscape: options.orientation === 'landscape'
+      });
+    } finally {
+      await browser.close();
+    }
 
     return pdfBuffer;
   } catch (error) {

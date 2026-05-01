@@ -3,6 +3,7 @@
 //  GCWadmin
 //
 //  Base glass morphism component matching admin.css effects
+//  Updated with Liquid Glass support for iOS 26+
 //
 
 import SwiftUI
@@ -63,7 +64,7 @@ enum GlassStyle {
     }
 }
 
-// MARK: - Glass View Modifier
+// MARK: - Glass View Modifier (iOS 26+ with Liquid Glass support)
 struct GlassModifier: ViewModifier {
     let intensity: GlassIntensity
     let style: GlassStyle
@@ -72,38 +73,102 @@ struct GlassModifier: ViewModifier {
     let showShadow: Bool
 
     func body(content: Content) -> some View {
-        content
-            .background {
-                if style == .dark {
-                    Color.black.opacity(0.85)
-                } else {
-                    ZStack {
-                        Color.clear
-                            .background(intensity.material)
-                        Color.white.opacity(intensity.overlayOpacity)
+        if #available(iOS 26.0, *) {
+            // Use Liquid Glass on iOS 26+
+            content
+                .glassEffect(glassVariant, in: .rect(cornerRadius: cornerRadius))
+        } else {
+            // Use traditional glass morphism on iOS 18-25
+            content
+                .background {
+                    if style == .dark {
+                        Color.black.opacity(0.85)
+                    } else {
+                        ZStack {
+                            Color.clear
+                                .background(intensity.material)
+                            Color.white.opacity(intensity.overlayOpacity)
+                        }
                     }
                 }
-            }
-            .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
-            .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius)
-                    .stroke(
-                        style.borderColor.opacity(intensity.borderOpacity),
-                        lineWidth: showBorder ? 1 : 0
-                    )
-            )
-            .shadow(
-                color: showShadow ? AppShadows.glass.color : .clear,
-                radius: showShadow ? AppShadows.glass.radius : 0,
-                x: AppShadows.glass.x,
-                y: showShadow ? AppShadows.glass.y : 0
-            )
+                .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+                .overlay(
+                    RoundedRectangle(cornerRadius: cornerRadius)
+                        .stroke(
+                            style.borderColor.opacity(intensity.borderOpacity),
+                            lineWidth: showBorder ? 1 : 0
+                        )
+                )
+                .shadow(
+                    color: showShadow ? AppShadows.glass.color : .clear,
+                    radius: showShadow ? AppShadows.glass.radius : 0,
+                    x: AppShadows.glass.x,
+                    y: showShadow ? AppShadows.glass.y : 0
+                )
+        }
+    }
+    
+    // Configure Liquid Glass variant based on style and intensity
+    @available(iOS 26.0, *)
+    private var glassVariant: Glass {
+        let baseGlass: Glass = .regular
+        
+        switch style {
+        case .light:
+            // Light glass with subtle tint for better visibility on dark backgrounds
+            return baseGlass.tint(.white.opacity(0.05))
+        case .dark:
+            // Darker glass with tint for login/modal backgrounds
+            return baseGlass.tint(.black.opacity(0.3))
+        }
+    }
+}
+
+// MARK: - Tab Glass Modifier (with active state and iOS 26+ support)
+struct TabGlassModifier: ViewModifier {
+    let isActive: Bool
+    let cornerRadius: CGFloat
+
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            // Use Liquid Glass with interactive mode for tabs on iOS 26+
+            content
+                .glassEffect(
+                    isActive ? .regular.tint(.blue.opacity(0.15)).interactive() : .regular.interactive(),
+                    in: .rect(cornerRadius: cornerRadius)
+                )
+        } else {
+            // Traditional glass morphism for iOS 18-25
+            content
+                .background(
+                    isActive
+                        ? AppColors.glassActiveBlue
+                        : AppColors.glassTab
+                )
+                .background(.ultraThinMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+                .overlay(
+                    RoundedRectangle(cornerRadius: cornerRadius)
+                        .stroke(
+                            isActive
+                                ? AppColors.glassActiveBlueBorder
+                                : AppColors.glassBorderLight,
+                            lineWidth: 1
+                        )
+                )
+                .shadow(
+                    color: isActive ? AppShadows.activeTab.color : .clear,
+                    radius: isActive ? AppShadows.activeTab.radius : 0,
+                    x: AppShadows.activeTab.x,
+                    y: isActive ? AppShadows.activeTab.y : 0
+                )
+        }
     }
 }
 
 // MARK: - View Extension
 extension View {
-    /// Apply glass morphism effect
+    /// Apply glass morphism effect (iOS 26+ uses Liquid Glass, older versions use Material)
     func glass(
         intensity: GlassIntensity = .regular,
         style: GlassStyle = .light,
@@ -184,38 +249,6 @@ extension View {
             showBorder: true,
             showShadow: false
         )
-    }
-}
-
-// MARK: - Tab Glass Modifier (with active state)
-struct TabGlassModifier: ViewModifier {
-    let isActive: Bool
-    let cornerRadius: CGFloat
-
-    func body(content: Content) -> some View {
-        content
-            .background(
-                isActive
-                    ? AppColors.glassActiveBlue
-                    : AppColors.glassTab
-            )
-            .background(.ultraThinMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
-            .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius)
-                    .stroke(
-                        isActive
-                            ? AppColors.glassActiveBlueBorder
-                            : AppColors.glassBorderLight,
-                        lineWidth: 1
-                    )
-            )
-            .shadow(
-                color: isActive ? AppShadows.activeTab.color : .clear,
-                radius: isActive ? AppShadows.activeTab.radius : 0,
-                x: AppShadows.activeTab.x,
-                y: isActive ? AppShadows.activeTab.y : 0
-            )
     }
 }
 
@@ -322,6 +355,13 @@ struct DarkGlassCard<Content: View>: View {
                         .foregroundColor(.gray)
                 }
             }
+            
+            Text("On iOS 26+: Uses Liquid Glass ✨")
+                .font(.caption)
+                .foregroundColor(.white.opacity(0.6))
+            Text("On iOS 18-25: Uses Material Glass")
+                .font(.caption)
+                .foregroundColor(.white.opacity(0.6))
         }
         .padding()
     }

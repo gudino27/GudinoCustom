@@ -192,8 +192,6 @@ struct TabButton: View {
     let isActive: Bool
     let action: () -> Void
 
-    @State private var isHovered = false
-
     var body: some View {
         Button(action: action) {
             HStack(spacing: AppSpacing.sm) {
@@ -205,8 +203,8 @@ struct TabButton: View {
             }
             .foregroundColor(
                 isActive
-                    ? AppColors.blueDark
-                    : AppColors.textMedium
+                    ? AppColors.blueDark  // dark blue on the active white glass chip
+                    : .white              // white on the gray AppColors.primary nav bar
             )
             .padding(.horizontal, AppSpacing.lg)
             .padding(.vertical, AppSpacing.md)
@@ -250,27 +248,22 @@ struct LanguageSelectorButton: View {
             .ignoresSafeArea()
 
         VStack(spacing: AppSpacing.xl) {
-            // Primary button
             PrimaryButton("Sign In", icon: "arrow.right") {
                 print("Sign in tapped")
             }
 
-            // Loading primary button
             PrimaryButton("Signing In...", isLoading: true) {
                 print("Loading")
             }
 
-            // Disabled primary button
             PrimaryButton("Disabled", isDisabled: true) {
                 print("Disabled")
             }
 
-            // Glass button
             GlassButton("Glass Button", icon: "star.fill") {
                 print("Glass button tapped")
             }
 
-            // Icon buttons
             HStack(spacing: AppSpacing.base) {
                 IconButton(icon: "xmark") {
                     print("Close")
@@ -281,7 +274,6 @@ struct LanguageSelectorButton: View {
                 }
             }
 
-            // Tab buttons
             HStack(spacing: AppSpacing.sm) {
                 TabButton(title: "Prices", icon: "dollarsign.circle", isActive: true) {
                     print("Prices")
@@ -292,7 +284,6 @@ struct LanguageSelectorButton: View {
                 }
             }
 
-            // Language selector
             LanguageSelectorButton(currentLanguage: "English") {
                 print("Language selector")
             }
