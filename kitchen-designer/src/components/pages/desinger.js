@@ -59,7 +59,6 @@ import {
 // Custom designer hooks
 import { useDesignerRefs } from "../../hooks/designer/useDesignerRefs";
 import { useDesignerState } from "../../hooks/designer/useDesignerState";
-import { useDesignerPricing as useDesignerPricingHook } from "../../hooks/designer/useDesignerPricing";
 import { useLocalStorage } from "../../hooks/designer/useLocalStorage";
 import { usePricing as useDesignerPricing } from "../../hooks/designer/usePricing";
 import { useRoomManagement } from "../../hooks/designer/useRoomManagement";
