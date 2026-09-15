@@ -6,6 +6,7 @@ export const useElementManagement = ({
   scale,
   setSelectedElement,
   getDoorClearanceZones,
+  onDoorClearanceWarning,
 }) => {
   const checkDoorClearanceCollision = (
     elementX,
@@ -104,10 +105,8 @@ export const useElementManagement = ({
       }
 
       // If no position found, warn user and use center anyway
-      if (!foundPosition) {
-        alert(
-          "Warning: Element placed in door clearance area. Please move it to ensure proper door access."
-        );
+      if (!foundPosition && onDoorClearanceWarning) {
+        onDoorClearanceWarning();
       }
     }
 

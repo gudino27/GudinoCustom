@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import LanguageSelector from './LanguageSelector';
+import { useLanguage } from '../../contexts/LanguageContext';
 import '../css/navigation.css';
 
 const Navigation = () => {
     const location = useLocation();
+    const { t } = useLanguage();
     const [isNavCollapsed, setIsNavCollapsed] = useState(true);
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [showroomVisible, setShowroomVisible] = useState(false);
@@ -72,6 +74,9 @@ const Navigation = () => {
         return false;
     };
 
+    // aria-current tells screen readers which link is the page they are on
+    const currentPage = (path) => (isActive(path) ? 'page' : undefined);
+
     const handleNavCollapse = () => setIsNavCollapsed(!isNavCollapsed);
 
     const toggleDropdown = () => setIsDropdownOpen(!isDropdownOpen);
@@ -85,9 +90,12 @@ const Navigation = () => {
     };
 
     return (
-        <nav className="navbar navbar-expand-lg" id="main-nav">
-            <Link className={`navbar-brand ${isActive('/') ? 'active' : ''}`} to="/">
-                <img src="/O.png" alt="Gudino Custom Woodworking Logo" width="250" height="60" />
+        <>
+        {/* First focusable element on every page, so keyboard users can jump the nav */}
+        <a className="skip-link" href="#main-content">{t('a11y.skipToContent')}</a>
+        <nav className="navbar navbar-expand-lg" id="main-nav" aria-label={t('nav.primary')}>
+            <Link className={`navbar-brand ${isActive('/') ? 'active' : ''}`} to="/" aria-current={currentPage('/')}>
+                <img src="/O.png" alt={t('nav.home')} width="250" height="60" />
             </Link>
 
             <button
@@ -96,65 +104,68 @@ const Navigation = () => {
                 onClick={handleNavCollapse}
                 aria-controls="navbarNav"
                 aria-expanded={!isNavCollapsed}
-                aria-label="Toggle navigation"
+                aria-label={t('nav.menu')}
             >
                 <span className="navbar-toggler-icon"></span>
             </button>
 
             <div className={`collapse navbar-collapse ${isNavCollapsed ? '' : 'show'}`} id="navbarNav">
                 <div className="navbar-nav ms-auto">
-                    <Link className={`nav-link text-white ${isActive('/portfolio') ? 'active' : ''}`} to="/portfolio" onClick={handleNavCollapse}>
-                        <p>Portfolio</p>
+                    <Link className={`nav-link text-white ${isActive('/portfolio') ? 'active' : ''}`} to="/portfolio" onClick={handleNavCollapse} aria-current={currentPage('/portfolio')}>
+                        <p>{t('nav.portfolio')}</p>
                     </Link>
-                    <Link className={`nav-link text-white ${isActive('/design') ? 'active' : ''}`} to="/design" onClick={handleNavCollapse}>
-                        <p>Design</p>
+                    <Link className={`nav-link text-white ${isActive('/design') ? 'active' : ''}`} to="/design" onClick={handleNavCollapse} aria-current={currentPage('/design')}>
+                        <p>{t('nav.design')}</p>
                     </Link>
                     {showroomVisible && (
-                        <Link className={`nav-link text-white ${isActive('/showroom') ? 'active' : ''}`} to="/showroom" onClick={handleNavCollapse}>
-                            <p>Showroom</p>
+                        <Link className={`nav-link text-white ${isActive('/showroom') ? 'active' : ''}`} to="/showroom" onClick={handleNavCollapse} aria-current={currentPage('/showroom')}>
+                            <p>{t('nav.showroom')}</p>
                         </Link>
                     )}
-                    <Link className={`nav-link text-white ${isActive('/about') ? 'active' : ''}`} to="/about" onClick={handleNavCollapse}>
-                        <p>About</p>
+                    <Link className={`nav-link text-white ${isActive('/about') ? 'active' : ''}`} to="/about" onClick={handleNavCollapse} aria-current={currentPage('/about')}>
+                        <p>{t('nav.about')}</p>
                     </Link>
-                    <Link className={`nav-link text-white ${isActive('/contact') ? 'active' : ''}`} to="/contact" onClick={handleNavCollapse}>
-                        <p>Contact</p>
+                    <Link className={`nav-link text-white ${isActive('/contact') ? 'active' : ''}`} to="/contact" onClick={handleNavCollapse} aria-current={currentPage('/contact')}>
+                        <p>{t('nav.contact')}</p>
                     </Link>
 
                     <div className={`nav-item dropdown ${isActive('/cabinet-care') || isActive('/why-choose-us') || isActive('/book-appointment') || isActive('/hardware-catalog') ? 'active' : ''} ${isDropdownOpen ? 'show' : ''}`} style={{paddingRight:'30px'}}>
                         <button
                             className="nav-link dropdown-toggle text-white mx-3"
+                            type="button"
                             onClick={toggleDropdown}
                             aria-expanded={isDropdownOpen}
+                            aria-controls="cabinet101-menu"
                         >
-                            <p style={{ fontWeight:'200'}}>Cabinet 101</p>
+                            {/* a <p> is not valid inside a <button> */}
+                            <span className="nav-toggle-label" style={{ fontWeight:'200'}}>{t('nav.cabinet101')}</span>
                         </button>
-                        <ul className={`dropdown-menu ${isDropdownOpen ? 'show' : ''}`}style={{marginLeft:'40px'}}>
+                        <ul className={`dropdown-menu ${isDropdownOpen ? 'show' : ''}`} id="cabinet101-menu" style={{marginLeft:'40px'}}>
                             <li>
-                                <Link className="dropdown-item text-left" to="/cabinet-care" onClick={closeDropdown}style={{border:"1px solid #ffffff8a",textAlign:"center"}}>
-                                    Cabinet Care
+                                <Link className="dropdown-item text-left" to="/cabinet-care" onClick={closeDropdown} aria-current={currentPage('/cabinet-care')} style={{border:"1px solid #ffffff8a",textAlign:"center"}}>
+                                    {t('footer.cabinetCare')}
                                 </Link>
                             </li>
                             <li>
-                                <Link className="dropdown-item text-center" to="/hardware-catalog" onClick={closeDropdown}style={{border:"1px solid #ffffff8a",textAlign:"center"}}>
-                                    Hardware Catalog
+                                <Link className="dropdown-item text-center" to="/hardware-catalog" onClick={closeDropdown} aria-current={currentPage('/hardware-catalog')} style={{border:"1px solid #ffffff8a",textAlign:"center"}}>
+                                    {t('nav.hardwareCatalog')}
                                 </Link>
                             </li>
                             <li>
-                                <Link className="dropdown-item text-center" to="/why-choose-us" onClick={closeDropdown}style={{border:"1px solid #ffffff8a",textAlign:"center"}}>
-                                    Why Choose Us
+                                <Link className="dropdown-item text-center" to="/why-choose-us" onClick={closeDropdown} aria-current={currentPage('/why-choose-us')} style={{border:"1px solid #ffffff8a",textAlign:"center"}}>
+                                    {t('nav.whyChooseUs')}
                                 </Link>
                             </li>
                             <li>
-                                <Link className="dropdown-item text-center" to="/book-appointment" onClick={closeDropdown}style={{border:"1px solid #ffffff8a",textAlign:"center"}}>
-                                    Book Appointment
+                                <Link className="dropdown-item text-center" to="/book-appointment" onClick={closeDropdown} aria-current={currentPage('/book-appointment')} style={{border:"1px solid #ffffff8a",textAlign:"center"}}>
+                                    {t('nav.bookAppointment')}
                                 </Link>
                             </li>
                         </ul>
                     </div>
 
-                    <Link className={`nav-link text-white ${isActive('/admin') ? 'active' : ''}`} to="/admin" onClick={handleNavCollapse}>
-                        <p>Login</p>
+                    <Link className={`nav-link text-white ${isActive('/admin') ? 'active' : ''}`} to="/admin" onClick={handleNavCollapse} aria-current={currentPage('/admin')}>
+                        <p>{t('nav.login')}</p>
                     </Link>
                     <div className="nav-item nav-divider">
                         <LanguageSelector className="nav-language-selector" />
@@ -163,6 +174,7 @@ const Navigation = () => {
             </div>
 
         </nav >
+        </>
     );
 };
 

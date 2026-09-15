@@ -1,8 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Upload, X, Image as ImageIcon, Copy, ExternalLink, Check } from 'lucide-react';
+import { Upload, X, Copy, ExternalLink, Check } from 'lucide-react';
+import { useLanguage } from '../../contexts/LanguageContext';
 import Navigation from '../ui/Navigation';
 import Footer from '../ui/Footer';
+import SEO from '../ui/SEO';
+import { announce } from '../ui/LiveRegion';
 import '../css/testimonial-form.css';
 
 
@@ -11,6 +14,7 @@ const GOOGLE_PLACE_ID = 'ChIJRVHpJoQjmFQRV5JD2IPKyI4';
 const TestimonialForm = () => {
     const { token } = useParams();
     const navigate = useNavigate();
+    const { t } = useLanguage();
     const [formData, setFormData] = useState({
         client_name: '',
         message: '',
@@ -26,12 +30,49 @@ const TestimonialForm = () => {
     const [error, setError] = useState('');
     const [showGooglePrompt, setShowGooglePrompt] = useState(true);
     const [copied, setCopied] = useState(false);
+    // field name -> translation key of the message (kept as keys so the list
+    // follows a language switch)
+    const [fieldErrors, setFieldErrors] = useState({});
+
+    const successHeadingRef = useRef(null);
+    const finalThanksRef = useRef(null);
+    const errorSummaryRef = useRef(null);
+    const fileInputRef = useRef(null);
 
     const API_BASE = process.env.REACT_APP_API_URL || 'https://api.gudinocustom.com';
+
+    const errorKeys = Object.keys(fieldErrors);
+    const hasSummary = errorKeys.length > 0 || Boolean(error);
 
     useEffect(() => {
         validateToken();
     }, [token]);
+
+    // The confirmation replaces the form, so move focus to its heading (WCAG 2.4.3)
+    useEffect(() => {
+        if (submitted) {
+            successHeadingRef.current?.focus();
+        }
+    }, [submitted]);
+
+    // Same when the Google prompt is dismissed and the closing message takes its place
+    useEffect(() => {
+        if (!showGooglePrompt) {
+            finalThanksRef.current?.focus();
+        }
+    }, [showGooglePrompt]);
+
+    // Send focus to the error summary whenever a submit attempt fails
+    useEffect(() => {
+        if (Object.keys(fieldErrors).length > 0) {
+            errorSummaryRef.current?.focus();
+        }
+    }, [fieldErrors]);
+
+    const focusField = (event, id) => {
+        event.preventDefault();
+        document.getElementById(id)?.focus();
+    };
 
     const validateToken = async () => {
         try {
@@ -77,17 +118,17 @@ const TestimonialForm = () => {
         const maxFileSize = 10 * 1024 * 1024; // 10MB
 
         if (selectedFiles.length + files.length > maxFiles) {
-            setError(`You can only upload up to ${maxFiles} photos.`);
+            setError(t('forms.error.maxPhotos', { max: maxFiles }));
             return;
         }
 
         const validFiles = files.filter(file => {
             if (!file.type.startsWith('image/')) {
-                setError('Please only upload image files.');
+                setError(t('forms.error.imagesOnly'));
                 return false;
             }
             if (file.size > maxFileSize) {
-                setError('Each file must be less than 10MB.');
+                setError(t('forms.error.fileTooBig'));
                 return false;
             }
             return true;
@@ -112,12 +153,24 @@ const TestimonialForm = () => {
     const removeFile = (index) => {
         setSelectedFiles(prev => prev.filter((_, i) => i !== index));
         setPreviewUrls(prev => prev.filter((_, i) => i !== index));
+        // the button that was pressed is gone, so put focus somewhere sensible
+        setTimeout(() => fileInputRef.current?.focus(), 0);
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        setLoading(true);
         setError('');
+
+        const errors = {};
+        if (!formData.message.trim()) {
+            errors.message = 'testimonial.error.messageRequired';
+        }
+        setFieldErrors(errors);
+        if (Object.keys(errors).length > 0) {
+            return;
+        }
+
+        setLoading(true);
         setUploadProgress(0);
 
         try {
@@ -144,13 +197,14 @@ const TestimonialForm = () => {
 
             if (response.ok) {
                 setSubmitted(true);
+                announce(t('testimonial.thanksText'));
             } else {
                 const errorData = await response.json();
-                setError(errorData.error || 'Failed to submit testimonial');
+                setError(errorData.error || t('testimonial.error.submitFailed'));
             }
         } catch (error) {
             console.error('Error submitting testimonial:', error);
-            setError('Failed to submit testimonial. Please try again.');
+            setError(t('testimonial.error.submitFailed'));
         } finally {
             setLoading(false);
             setUploadProgress(0);
@@ -165,14 +219,18 @@ const TestimonialForm = () => {
         }));
     };
 
+    const seo = <SEO title={t('testimonial.pageTitle')} description={t('testimonial.intro')} />;
+
     if (isValidToken === null) {
         return (
             <>
+                {seo}
                 <Navigation />
-                <div className="testimonial-container">
-                    <div className="loading-spinner"></div>
-                    <p>Validating access...</p>
-                </div>
+                <main id="main-content" tabIndex={-1} className="testimonial-container">
+                    <h1 className="sr-only">{t('testimonial.heading')}</h1>
+                    <div className="loading-spinner" aria-hidden="true"></div>
+                    <p>{t('testimonial.validating')}</p>
+                </main>
             </>
         );
     }
@@ -180,16 +238,17 @@ const TestimonialForm = () => {
     if (!isValidToken) {
         return (
             <>
+                {seo}
                 <Navigation />
-                <div className="testimonial-container">
+                <main id="main-content" tabIndex={-1} className="testimonial-container">
                     <div className="error-card">
-                        <h2>Invalid or Expired Link</h2>
-                        <p>This testimonial link is not valid or has expired. Please contact Gudino Custom Woodworking for a new link.</p>
-                        <button onClick={() => navigate('/')} className="btn-primary">
-                            Return Home
+                        <h1>{t('testimonial.invalidTitle')}</h1>
+                        <p>{t('testimonial.invalidText')}</p>
+                        <button type="button" onClick={() => navigate('/')} className="btn-primary">
+                            {t('appointments.backToHome')}
                         </button>
                     </div>
-                </div>
+                </main>
             </>
         );
     }
@@ -199,9 +258,11 @@ const TestimonialForm = () => {
         try {
             await navigator.clipboard.writeText(formData.message);
             setCopied(true);
+            announce(t('testimonial.google.copiedAnnounce'));
             setTimeout(() => setCopied(false), 3000);
         } catch (err) {
             console.error('Failed to copy:', err);
+            announce(t('testimonial.google.copyFailed'));
         }
     };
 
@@ -220,37 +281,45 @@ const TestimonialForm = () => {
     if (submitted) {
         return (
             <>
+                {seo}
                 <Navigation />
-                <div className="testimonial-container">
+                <main id="main-content" tabIndex={-1} className="testimonial-container">
                     <div className="success-card success-card-wide">
-                        <div className="success-icon">✓</div>
-                        <h2>Thank You!</h2>
-                        <p>Your testimonial has been submitted successfully!</p>
+                        <div className="success-icon" aria-hidden="true">✓</div>
+                        <h1 ref={successHeadingRef} tabIndex={-1}>{t('testimonial.thanksTitle')}</h1>
+                        <p>{t('testimonial.thanksText')}</p>
 
                         {showGooglePrompt ? (
                             <div className="google-review-section">
                                 <div className="google-review-prompt">
-                                    <h3>Help us reach more customers!</h3>
-                                    <p>Would you mind sharing this review on Google? It only takes a minute and helps other homeowners find us.</p>
+                                    <h2>{t('testimonial.google.promptTitle')}</h2>
+                                    <p>{t('testimonial.google.promptText')}</p>
                                 </div>
 
                                 <div className="google-review-split">
                                     {/* Left side - Review text */}
                                     <div className="review-text-panel">
                                         <div className="panel-header">
-                                            <span>Your Review</span>
+                                            <span>{t('testimonial.google.yourReview')}</span>
                                             <button
+                                                type="button"
                                                 onClick={handleCopyReview}
                                                 className="copy-btn"
-                                                title="Copy to clipboard"
+                                                title={t('testimonial.google.copyToClipboard')}
                                             >
                                                 {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                                                {copied ? 'Copied!' : 'Copy'}
+                                                {copied ? t('testimonialManager.copied') : t('testimonial.google.copy')}
                                             </button>
                                         </div>
                                         <div className="review-text-content">
-                                            <div className="review-stars">
-                                                {'★'.repeat(formData.rating)}{'☆'.repeat(5 - formData.rating)}
+                                            <div
+                                                className="review-stars"
+                                                role="img"
+                                                aria-label={t('testimonial.ratingValue', { n: formData.rating })}
+                                            >
+                                                <span aria-hidden="true">
+                                                    {'★'.repeat(formData.rating)}{'☆'.repeat(5 - formData.rating)}
+                                                </span>
                                             </div>
                                             <p>{formData.message}</p>
                                         </div>
@@ -259,62 +328,91 @@ const TestimonialForm = () => {
                                     {/* Right side - Google action */}
                                     <div className="google-action-panel">
                                         <div className="google-logo">
-                                            <svg viewBox="0 0 24 24" width="48" height="48">
+                                            <svg viewBox="0 0 24 24" width="48" height="48" aria-hidden="true" focusable="false">
                                                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
                                                 <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
                                                 <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
                                                 <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
                                             </svg>
                                         </div>
-                                        <h4>Share on Google</h4>
+                                        <h3>{t('testimonial.google.title')}</h3>
                                         <p className="google-instructions">
-                                            Click below to open Google Reviews. Your review text has been copied - just paste it!
+                                            {t('testimonial.google.instructions')}
                                         </p>
                                         <button
+                                            type="button"
                                             onClick={handleCopyAndOpen}
                                             className="btn-google"
                                         >
                                             <ExternalLink className="w-4 h-4" />
-                                            Copy & Open Google Reviews
+                                            {t('testimonial.google.button')}
+                                            <span className="sr-only">{t('a11y.opensInNewTab')}</span>
                                         </button>
                                     </div>
                                 </div>
 
                                 <button
+                                    type="button"
                                     onClick={() => setShowGooglePrompt(false)}
                                     className="btn-secondary skip-btn"
                                 >
-                                    No thanks, I'm done
+                                    {t('testimonial.google.skip')}
                                 </button>
                             </div>
                         ) : (
                             <div className="final-thanks">
-                                <p>We appreciate your feedback!</p>
-                                <button onClick={() => navigate('/')} className="btn-primary">
-                                    Return Home
+                                <p ref={finalThanksRef} tabIndex={-1}>{t('testimonial.finalThanks')}</p>
+                                <button type="button" onClick={() => navigate('/')} className="btn-primary">
+                                    {t('appointments.backToHome')}
                                 </button>
                             </div>
                         )}
                     </div>
-                </div>
+                </main>
             </>
         );
     }
 
     return (
         <>
+            {seo}
             <Navigation />
-            <div className="testimonial-container">
+            <main id="main-content" tabIndex={-1} className="testimonial-container">
                 <div className="testimonial-form-card">
-                    <h2>Share Your Experience</h2>
+                    <h1>{t('testimonial.heading')}</h1>
                     <p className="form-description">
-                        We'd love to hear about your experience with Gudino Custom Woodworking.
-                        Your testimonial helps other homeowners discover our services.
+                        {t('testimonial.intro')}
                     </p>
 
-                    <form onSubmit={handleSubmit} className="testimonial-form">
+                    <p className="form-required-legend">{t('a11y.requiredLegend')}</p>
+
+                    {/* Kept in the DOM while empty so screen readers pick up the alert */}
+                    <div
+                        ref={errorSummaryRef}
+                        role="alert"
+                        tabIndex={-1}
+                        className={hasSummary ? 'error-message' : undefined}
+                    >
+                        {errorKeys.length > 0 && (
+                            <>
+                                <p>{t('forms.errorSummary', { count: errorKeys.length })}</p>
+                                <ul className="error-summary-list">
+                                    {errorKeys.map((field) => (
+                                        <li key={field}>
+                                            <a href={`#${field}`} onClick={(e) => focusField(e, field)}>
+                                                {t(fieldErrors[field])}
+                                            </a>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </>
+                        )}
+                        {error && <p>{error}</p>}
+                    </div>
+
+                    <form onSubmit={handleSubmit} className="testimonial-form" noValidate>
                         <div className="form-group">
-                            <label htmlFor="client_name">Your Name</label>
+                            <label htmlFor="client_name">{t('testimonial.name')}</label>
                             <input
                                 type="text"
                                 id="client_name"
@@ -322,7 +420,7 @@ const TestimonialForm = () => {
                                 value={formData.client_name}
                                 onChange={handleChange}
                                 required
-                                placeholder="Enter your full name"
+                                placeholder={t('appointments.namePlaceholder')}
                                 readOnly
                                 disabled
                                 style={{ backgroundColor: '#f3f4f6', cursor: 'not-allowed' }}
@@ -330,7 +428,7 @@ const TestimonialForm = () => {
                         </div>
 
                         <div className="form-group">
-                            <label htmlFor="project_type">Project Type</label>
+                            <label htmlFor="project_type">{t('testimonial.projectType')}</label>
                             <input
                                 type="text"
                                 id="project_type"
@@ -342,25 +440,43 @@ const TestimonialForm = () => {
                             />
                         </div>
 
-                        <div className="form-group">
-                            <label htmlFor="rating">Rating</label>
+                        <fieldset className="form-group">
+                            <legend>{t('testimonial.rating')}</legend>
                             <div className="rating-container">
                                 {[1, 2, 3, 4, 5].map(star => (
-                                    <button
+                                    <label
                                         key={star}
-                                        type="button"
                                         className={`star ${formData.rating >= star ? 'active' : ''}`}
-                                        onClick={() => setFormData(prev => ({ ...prev, rating: star }))}
                                     >
-                                        ★
-                                    </button>
+                                        <input
+                                            type="radio"
+                                            name="rating"
+                                            value={star}
+                                            checked={formData.rating === star}
+                                            onChange={() => setFormData(prev => ({ ...prev, rating: star }))}
+                                            className="sr-only star-input"
+                                        />
+                                        <span className="star-glyph" aria-hidden="true">
+                                            {formData.rating >= star ? '★' : '☆'}
+                                        </span>
+                                        <span className="sr-only">
+                                            {star === 1 ? t('testimonial.starOne', { n: star }) : t('testimonial.starN', { n: star })}
+                                        </span>
+                                    </label>
                                 ))}
-                                <span className="rating-text">({formData.rating} star{formData.rating !== 1 ? 's' : ''})</span>
+                                {/* the radio group already exposes the value to assistive tech */}
+                                <span className="rating-text" aria-hidden="true">
+                                    ({formData.rating === 1
+                                        ? t('testimonial.starOne', { n: formData.rating })
+                                        : t('testimonial.starN', { n: formData.rating })})
+                                </span>
                             </div>
-                        </div>
+                        </fieldset>
 
                         <div className="form-group">
-                            <label htmlFor="message">Your Testimonial</label>
+                            <label htmlFor="message">
+                                {t('testimonial.message')} <span aria-hidden="true">*</span>
+                            </label>
                             <textarea
                                 id="message"
                                 name="message"
@@ -368,30 +484,37 @@ const TestimonialForm = () => {
                                 onChange={handleChange}
                                 required
                                 rows="5"
-                                placeholder="Tell us about your experience with our carpentry services..."
+                                placeholder={t('testimonial.messagePlaceholder')}
+                                aria-invalid={fieldErrors.message ? 'true' : undefined}
+                                aria-describedby={fieldErrors.message ? 'message-error' : undefined}
                             />
+                            {fieldErrors.message && (
+                                <p className="field-error" id="message-error">{t(fieldErrors.message)}</p>
+                            )}
                         </div>
 
-                        <div className="form-group">
-                            <label>Photos of Your Project (Optional)</label>
-                            <p className="form-help-text">
-                                Share photos of your completed cabinets or project. Up to 5 photos, 10MB each.
+                        <fieldset className="form-group">
+                            <legend>{t('testimonial.photosLegend')}</legend>
+                            <p className="form-help-text" id="photos-help">
+                                {t('testimonial.photosHelp')}
                             </p>
 
                             <div className="photo-upload-area">
                                 <input
                                     type="file"
                                     id="photos"
+                                    ref={fileInputRef}
                                     multiple
                                     accept="image/*"
                                     onChange={handleFileChange}
                                     className="file-input-hidden"
+                                    aria-describedby="photos-help"
                                 />
                                 <label htmlFor="photos" className="file-upload-label">
                                     <Upload className="upload-icon" />
-                                    <span>Click to upload photos or drag and drop </span>
+                                    <span>{t('forms.choosePhotos')}</span>
                                     <span className="file-upload-subtitle">
-                                        PNG, JPG, WebP up to 10MB each
+                                        {t('forms.photoTypes')}
                                     </span>
                                 </label>
                             </div>
@@ -400,12 +523,12 @@ const TestimonialForm = () => {
                                 <div className="photo-previews">
                                     {previewUrls.map((url, index) => (
                                         <div key={index} className="photo-preview">
-                                            <img src={url} alt={`Preview ${index + 1}`} />
+                                            <img src={url} alt={t('forms.photoPreview', { n: index + 1 })} />
                                             <button
                                                 type="button"
                                                 onClick={() => removeFile(index)}
                                                 className="remove-photo-btn"
-                                                aria-label="Remove photo"
+                                                aria-label={t('forms.removePhoto', { n: index + 1 })}
                                             >
                                                 <X className="w-4 h-4" />
                                             </button>
@@ -413,30 +536,24 @@ const TestimonialForm = () => {
                                     ))}
                                 </div>
                             )}
-                        </div>
-
-                        {error && (
-                            <div className="error-message">
-                                {error}
-                            </div>
-                        )}
+                        </fieldset>
 
                         <button type="submit" disabled={loading} className="btn-primary">
                             {loading ? (
-                                <div className="submit-progress">
-                                    <div className="loading-spinner"></div>
+                                <span className="submit-progress">
+                                    <span className="loading-spinner" aria-hidden="true"></span>
                                     {selectedFiles.length > 0 && uploadProgress > 0 ?
-                                        `Uploading... ${uploadProgress}%` :
-                                        'Submitting...'
+                                        t('testimonial.uploading', { percent: uploadProgress }) :
+                                        t('testimonial.submitting')
                                     }
-                                </div>
+                                </span>
                             ) : (
-                                'Submit Testimonial'
+                                t('testimonial.submit')
                             )}
                         </button>
                     </form>
                 </div>
-            </div>
+            </main>
             <Footer />
         </>
     );

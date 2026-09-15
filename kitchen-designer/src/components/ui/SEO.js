@@ -5,6 +5,8 @@ import { Helmet } from 'react-helmet-async';
  * Provides dynamic meta tags for each page to improve search engine optimization
  * and social media sharing
  */
+const SITE_NAME = 'Gudino Custom Woodworking';
+
 const SEO = ({
   title,
   description,
@@ -12,7 +14,15 @@ const SEO = ({
   ogImage = 'https://gudinocustom.com/O.png',
   canonical
 }) => {
-  const fullTitle = `${title} | Gudino Custom Woodworking`;
+  // Pages pass translated titles, some of which already name the business
+  // ("Por Qué Elegir Gudino Custom Woodworking"), so only add the suffix when
+  // it is missing - and never render "undefined | ..." when a page omits it.
+  const pageTitle = typeof title === 'string' ? title.trim() : '';
+  const fullTitle = !pageTitle
+    ? SITE_NAME
+    : pageTitle.toLowerCase().includes(SITE_NAME.toLowerCase())
+      ? pageTitle
+      : `${pageTitle} | ${SITE_NAME}`;
 
   return (
     <Helmet>

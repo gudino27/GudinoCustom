@@ -1,10 +1,39 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { RotateCw, Trash2, X, Move } from 'lucide-react';
+import React, { useState, useRef, useEffect, useId } from 'react';
+import { RotateCw, Trash2, X, ArrowLeftToLine, ArrowRightToLine } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useIsMobile } from '../../hooks/useResponsive';
+import { getElementName } from './elementName';
 
 // Module-level variable to persist panel position across component mounts
 let persistedPosition = { x: 20, y: 120 };
+
+const PANEL_WIDTH = 288; // w-72
+const DOCK_MARGIN = 20;
+
+// Number input that lets the user clear and retype a value; each valid number
+// is committed straight away, and the field shows the real value again on blur.
+const PositionInput = ({ id, value, min, max, onCommit, describedBy }) => {
+  const [draft, setDraft] = useState(null);
+  return (
+    <input
+      id={id}
+      type="number"
+      step="any"
+      inputMode="decimal"
+      min={min}
+      max={max}
+      value={draft ?? value}
+      onChange={(e) => {
+        setDraft(e.target.value);
+        const num = parseFloat(e.target.value);
+        if (!Number.isNaN(num)) onCommit(num);
+      }}
+      onBlur={() => setDraft(null)}
+      aria-describedby={describedBy}
+      className="w-full p-3 min-h-12 text-sm border rounded"
+    />
+  );
+};
 
 const FloatingPropertiesPanel = ({
   selectedElement,
@@ -16,11 +45,18 @@ const FloatingPropertiesPanel = ({
   rotateElement,
   rotateCornerCabinet,
   materialMultipliers,
+  scale = 1,
+  onPositionChange,
+  focusRequest = false,
+  onFocusRequestHandled,
   onClose
 }) => {
   const { t } = useLanguage();
   const isMobile = useIsMobile(); // Detect mobile for modal mode
   const panelRef = useRef(null);
+  const headingRef = useRef(null);
+  const uid = useId();
+  const fieldId = (name) => `${uid}-${name}`;
 
   // Use persisted position from module-level variable
   const [position, setPosition] = useState(persistedPosition);
@@ -124,6 +160,28 @@ const FloatingPropertiesPanel = ({
     }
   }, [isDragging]);
 
+  // Opened from the keyboard (floor plan item or element list): move focus in
+  useEffect(() => {
+    if (focusRequest && headingRef.current) {
+      headingRef.current.focus();
+      if (onFocusRequestHandled) onFocusRequestHandled();
+    }
+  }, [focusRequest, selectedElement, onFocusRequestHandled]);
+
+  // Close and tell the page whether focus was inside, so it can put it back
+  const closePanel = () => {
+    const hadFocus = !!panelRef.current && panelRef.current.contains(document.activeElement);
+    onClose({ restoreFocus: hadFocus });
+  };
+
+  // Single-click alternative to dragging the panel by its header (WCAG 2.5.7)
+  const dockPanel = (side) => {
+    const x = side === 'left'
+      ? DOCK_MARGIN
+      : Math.max(DOCK_MARGIN, window.innerWidth - PANEL_WIDTH - DOCK_MARGIN);
+    setPosition((prev) => ({ ...prev, x }));
+  };
+
   // Find the actual element object
   const element = currentRoomData.elements.find(el => el.id === selectedElement);
 
@@ -132,20 +190,39 @@ const FloatingPropertiesPanel = ({
   const elementSpec = elementTypes[element.type];
   if (!elementSpec) return null;
 
+  const elementName = getElementName(t, element.type, elementTypes);
+  const materialLabel = (material) =>
+    t(`materials.${material}`, material.charAt(0).toUpperCase() + material.slice(1));
+
+  // Position of the item's footprint, in inches from the left and top walls
+  const round1 = (n) => Math.round(n * 10) / 10;
+  const turned = element.rotation % 180 !== 0;
+  const footprintWidth = turned ? element.depth : element.width;
+  const footprintDepth = turned ? element.width : element.depth;
+  const maxX = Math.max(0, round1(parseFloat(currentRoomData.dimensions.width) * 12 - footprintWidth));
+  const maxY = Math.max(0, round1(parseFloat(currentRoomData.dimensions.height) * 12 - footprintDepth));
+
   return (
     <>
       {/* Mobile backdrop */}
       {isMobile && (
         <div
           className="fixed inset-0 bg-black bg-opacity-50 z-40"
-          onClick={onClose}
-          aria-label="Close properties panel"
+          onClick={closePanel}
         />
       )}
 
-      {/* Properties Panel */}
+      {/* Properties Panel (non-modal: the floor plan stays usable) */}
       <div
         ref={panelRef}
+        role="dialog"
+        aria-labelledby={fieldId('title')}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') {
+            e.stopPropagation();
+            closePanel();
+          }
+        }}
         className={`
           bg-white shadow-xl border border-gray-200 overflow-hidden flex flex-col
           ${isMobile
@@ -168,25 +245,95 @@ const FloatingPropertiesPanel = ({
           onMouseDown={handlePointerDown}
           onTouchStart={handlePointerDown}
         >
-          <h3 className="font-semibold text-gray-700 truncate pr-2 text-sm">{elementSpec.name}</h3>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 active:text-gray-800 p-2 min-h-10 min-w-10 rounded-full hover:bg-gray-200 active:bg-gray-300 active:scale-95 transition-all flex items-center justify-center"
-            aria-label="Close properties"
+          <h2
+            ref={headingRef}
+            id={fieldId('title')}
+            tabIndex={-1}
+            className="font-semibold text-gray-700 truncate pr-2 text-sm focus:outline-none"
           >
-            <X size={18} />
-          </button>
+            {elementName}
+          </h2>
+          <div className="flex items-center">
+            {!isMobile && (
+              <>
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={() => dockPanel('left')}
+                  className="text-gray-600 hover:text-gray-800 p-2 min-h-10 min-w-10 rounded-full hover:bg-gray-200 active:bg-gray-300 transition-all flex items-center justify-center"
+                  aria-label={t('designer.dockLeft')}
+                  title={t('designer.dockLeft')}
+                >
+                  <ArrowLeftToLine size={16} />
+                </button>
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={() => dockPanel('right')}
+                  className="text-gray-600 hover:text-gray-800 p-2 min-h-10 min-w-10 rounded-full hover:bg-gray-200 active:bg-gray-300 transition-all flex items-center justify-center"
+                  aria-label={t('designer.dockRight')}
+                  title={t('designer.dockRight')}
+                >
+                  <ArrowRightToLine size={16} />
+                </button>
+              </>
+            )}
+            <button
+              type="button"
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={closePanel}
+              className="text-gray-600 hover:text-gray-800 active:text-gray-800 p-2 min-h-10 min-w-10 rounded-full hover:bg-gray-200 active:bg-gray-300 active:scale-95 transition-all flex items-center justify-center"
+              aria-label={t('designer.closeProperties')}
+            >
+              <X size={18} />
+            </button>
+          </div>
         </div>
 
         {/* Content */}
         <div className="p-4 overflow-y-auto custom-scrollbar">
           <div className="space-y-4">
 
+            {/* Position: typed alternative to dragging on the floor plan (WCAG 2.5.7) */}
+            {onPositionChange && (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label htmlFor={fieldId('posx')} className="block text-sm font-semibold text-gray-500 uppercase mb-1">{t('designer.positionX')}</label>
+                  <PositionInput
+                    id={fieldId('posx')}
+                    value={round1(element.x / scale)}
+                    min={0}
+                    max={maxX}
+                    describedBy={fieldId('posx-hint')}
+                    onCommit={(inches) => onPositionChange(element.id, 'x', inches)}
+                  />
+                  <p id={fieldId('posx-hint')} className="text-xs text-gray-600 mt-1">
+                    {t('designer.hint.range', { min: 0, max: maxX, unit: t('designer.unit.in') })}
+                  </p>
+                </div>
+                <div>
+                  <label htmlFor={fieldId('posy')} className="block text-sm font-semibold text-gray-500 uppercase mb-1">{t('designer.positionY')}</label>
+                  <PositionInput
+                    id={fieldId('posy')}
+                    value={round1(element.y / scale)}
+                    min={0}
+                    max={maxY}
+                    describedBy={fieldId('posy-hint')}
+                    onCommit={(inches) => onPositionChange(element.id, 'y', inches)}
+                  />
+                  <p id={fieldId('posy-hint')} className="text-xs text-gray-600 mt-1">
+                    {t('designer.hint.range', { min: 0, max: maxY, unit: t('designer.unit.in') })}
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Material selection for cabinets */}
             {element.category === 'cabinet' && (
               <div>
-                <label className="block text-sm font-semibold text-gray-500 uppercase mb-1">Material</label>
+                <label htmlFor={fieldId('material')} className="block text-sm font-semibold text-gray-500 uppercase mb-1">{t('designer.material')}</label>
                 <select
+                  id={fieldId('material')}
                   value={currentRoomData.materials?.[element.id] || 'laminate'}
                   onChange={(e) => {
                     setCurrentRoomData({
@@ -201,7 +348,7 @@ const FloatingPropertiesPanel = ({
                 >
                   {Object.entries(materialMultipliers).map(([material, multiplier]) => (
                     <option key={material} value={material}>
-                      {material.charAt(0).toUpperCase() + material.slice(1)} ({multiplier === 1 ? 'Included' : `+${Math.round((multiplier - 1) * 100)}%`})
+                      {materialLabel(material)} ({multiplier === 1 ? t('designer.included') : `+${Math.round((multiplier - 1) * 100)}%`})
                     </option>
                   ))}
                 </select>
@@ -213,8 +360,9 @@ const FloatingPropertiesPanel = ({
               {/* Width */}
               {elementSpec.category === 'cabinet' && (
                 <div>
-                  <label className="block text-sm font-semibold text-gray-500 uppercase mb-1">Width (in)</label>
+                  <label htmlFor={fieldId('width')} className="block text-sm font-semibold text-gray-500 uppercase mb-1">{t('designer.widthIn')}</label>
                   <input
+                    id={fieldId('width')}
                     type="number"
                     step="0.5"
                     inputMode="decimal"
@@ -223,15 +371,20 @@ const FloatingPropertiesPanel = ({
                     className="w-full p-3 min-h-12 text-sm border rounded"
                     min="12"
                     max="60"
+                    aria-describedby={fieldId('width-hint')}
                   />
+                  <p id={fieldId('width-hint')} className="text-xs text-gray-600 mt-1">
+                    {t('designer.hint.range', { min: 12, max: 60, unit: t('designer.unit.in') })}
+                  </p>
                 </div>
               )}
 
               {/* Depth */}
               {elementSpec.category === 'cabinet' && (
                 <div>
-                  <label className="block text-sm font-semibold text-gray-500 uppercase mb-1">Depth (in)</label>
+                  <label htmlFor={fieldId('depth')} className="block text-sm font-semibold text-gray-500 uppercase mb-1">{t('designer.depthIn')}</label>
                   <input
+                    id={fieldId('depth')}
                     type="number"
                     step="0.5"
                     inputMode="decimal"
@@ -240,7 +393,11 @@ const FloatingPropertiesPanel = ({
                     className="w-full p-3 min-h-12 text-sm border rounded"
                     min="12"
                     max="36"
+                    aria-describedby={fieldId('depth-hint')}
                   />
+                  <p id={fieldId('depth-hint')} className="text-xs text-gray-600 mt-1">
+                    {t('designer.hint.range', { min: 12, max: 36, unit: t('designer.unit.in') })}
+                  </p>
                 </div>
               )}
             </div>
@@ -248,8 +405,9 @@ const FloatingPropertiesPanel = ({
             {/* Height - for variable height elements */}
             {elementSpec.category === 'cabinet' && !elementSpec.fixedHeight && (
               <div>
-                <label className="block text-sm font-semibold text-gray-500 uppercase mb-1">Height (in)</label>
+                <label htmlFor={fieldId('height')} className="block text-sm font-semibold text-gray-500 uppercase mb-1">{t('designer.heightIn')}</label>
                 <input
+                  id={fieldId('height')}
                   type="number"
                   step="0.5"
                   inputMode="decimal"
@@ -265,8 +423,9 @@ const FloatingPropertiesPanel = ({
             {/* Mount height for wall-mounted elements */}
             {elementSpec.mountHeight !== undefined && (
               <div>
-                <label className="block text-sm font-semibold text-gray-500 uppercase mb-1">Mount Height (in)</label>
+                <label htmlFor={fieldId('mount')} className="block text-sm font-semibold text-gray-500 uppercase mb-1">{t('designer.mountHeightIn')}</label>
                 <input
+                  id={fieldId('mount')}
                   type="number"
                   step="0.5"
                   inputMode="decimal"
@@ -280,69 +439,80 @@ const FloatingPropertiesPanel = ({
             )}
 
             {/* Rotation Controls */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-500 uppercase mb-2">Rotation ({element.rotation}°)</label>
+            <fieldset className="min-w-0">
+              <legend className="block text-sm font-semibold text-gray-500 uppercase mb-2">{t('designer.rotationDeg', { deg: element.rotation })}</legend>
               <div className="grid grid-cols-4 gap-2">
                 <button
+                  type="button"
                   onClick={() => rotateElement(element.id, -90)}
                   className="p-3 min-h-12 bg-gray-100 rounded hover:bg-gray-200 active:bg-gray-300 active:scale-95 transition-all flex items-center justify-center"
-                  title="Rotate -90°"
+                  aria-label={t('designer.rotateBy', { deg: '-90' })}
+                  title={t('designer.rotateBy', { deg: '-90' })}
                 >
                   <RotateCw size={16} className="transform scale-x-[-1]" />
                 </button>
                 <button
+                  type="button"
                   onClick={() => rotateElement(element.id, -15)}
-                  className="p-3 min-h-12 bg-blue-50 rounded hover:bg-blue-100 active:bg-blue-200 active:scale-95 transition-all flex items-center justify-center text-sm font-medium text-blue-600"
-                  title="Rotate -15°"
+                  className="p-3 min-h-12 bg-blue-50 rounded hover:bg-blue-100 active:bg-blue-200 active:scale-95 transition-all flex items-center justify-center text-sm font-medium text-blue-700"
+                  title={t('designer.rotateBy', { deg: '-15' })}
                 >
                   -15°
                 </button>
                 <button
+                  type="button"
                   onClick={() => rotateElement(element.id, 15)}
-                  className="p-3 min-h-12 bg-blue-50 rounded hover:bg-blue-100 active:bg-blue-200 active:scale-95 transition-all flex items-center justify-center text-sm font-medium text-blue-600"
-                  title="Rotate +15°"
+                  className="p-3 min-h-12 bg-blue-50 rounded hover:bg-blue-100 active:bg-blue-200 active:scale-95 transition-all flex items-center justify-center text-sm font-medium text-blue-700"
+                  title={t('designer.rotateBy', { deg: '+15' })}
                 >
                   +15°
                 </button>
                 <button
+                  type="button"
                   onClick={() => rotateElement(element.id, 90)}
                   className="p-3 min-h-12 bg-gray-100 rounded hover:bg-gray-200 active:bg-gray-300 active:scale-95 transition-all flex items-center justify-center"
-                  title="Rotate +90°"
+                  aria-label={t('designer.rotateBy', { deg: '+90' })}
+                  title={t('designer.rotateBy', { deg: '+90' })}
                 >
                   <RotateCw size={16} />
                 </button>
               </div>
-            </div>
+            </fieldset>
 
             {/* Corner cabinet hinge direction */}
             {element.type && element.type.includes('corner') && (
-              <div>
-                <label className="block text-sm font-semibold text-gray-500 uppercase mb-2">Hinge Direction</label>
+              <fieldset className="min-w-0">
+                <legend className="block text-sm font-semibold text-gray-500 uppercase mb-2">{t('designer.hingeDirection')}</legend>
                 <div className="flex gap-2">
                   <button
+                    type="button"
                     onClick={() => rotateCornerCabinet(element.id, 'left')}
-                    className={`flex-1 p-3 min-h-12 text-sm font-medium rounded active:scale-95 transition-all ${element.hingeDirection === 'left' ? 'bg-blue-500 text-white' : 'bg-blue-100 text-blue-700 active:bg-blue-200'}`}
+                    aria-pressed={element.hingeDirection === 'left'}
+                    className={`flex-1 p-3 min-h-12 text-sm font-medium rounded active:scale-95 transition-all ${element.hingeDirection === 'left' ? 'bg-blue-700 text-white' : 'bg-blue-100 text-blue-700 active:bg-blue-200'}`}
                   >
-                    Left
+                    {t('designer.hingeLeft')}
                   </button>
                   <button
+                    type="button"
                     onClick={() => rotateCornerCabinet(element.id, 'right')}
-                    className={`flex-1 p-3 min-h-12 text-sm font-medium rounded active:scale-95 transition-all ${element.hingeDirection === 'right' ? 'bg-blue-500 text-white' : 'bg-blue-100 text-blue-700 active:bg-blue-200'}`}
+                    aria-pressed={element.hingeDirection === 'right'}
+                    className={`flex-1 p-3 min-h-12 text-sm font-medium rounded active:scale-95 transition-all ${element.hingeDirection === 'right' ? 'bg-blue-700 text-white' : 'bg-blue-100 text-blue-700 active:bg-blue-200'}`}
                   >
-                    Right
+                    {t('designer.hingeRight')}
                   </button>
                 </div>
-              </div>
+              </fieldset>
             )}
 
             {/* Delete Action */}
             <div className="pt-2 border-t mt-2">
               <button
+                type="button"
                 onClick={() => deleteElement(element.id)}
-                className="w-full p-3 min-h-12 bg-red-50 text-red-600 rounded hover:bg-red-100 active:bg-red-200 active:scale-95 transition-all flex items-center justify-center gap-2 text-sm font-medium"
+                className="w-full p-3 min-h-12 bg-red-50 text-red-700 rounded hover:bg-red-100 active:bg-red-200 active:scale-95 transition-all flex items-center justify-center gap-2 text-sm font-medium"
               >
                 <Trash2 size={16} />
-                Remove Item
+                {t('designer.removeItem')}
               </button>
             </div>
           </div>

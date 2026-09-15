@@ -19,7 +19,7 @@ const WhyChooseUs = () => {
       <div style={{background:"rgb(110,110,110)"}}>
         <Navigation />
       <div style={{ height: "1vh" }}></div>
-      <div className="sms-compliance-container">
+      <main id="main-content" tabIndex={-1} className="sms-compliance-container">
         <div className="sms-content">
           <h1 className="sms-header">{t('whyChooseUs.title')}</h1>
           <p>
@@ -85,48 +85,41 @@ const WhyChooseUs = () => {
 
             <ul className="sms-list">
               <li style={{ marginTop: "12px" }}>
-                <strong>Measurements Gone Wrong</strong>
+                <strong>{t('whyChooseUs.bigBox.measurements.title')}</strong>
                 <p>
-                  Third parties or homeowners take the measurements, which can lead to cabinets
-                  that don't actually fit when they arrive.
+                  {t('whyChooseUs.bigBox.measurements.description')}
                 </p>
               </li>
               <li style={{ marginTop: "12px" }}>
-                <strong>Long Waits and Delays</strong>
+                <strong>{t('whyChooseUs.bigBox.delays.title')}</strong>
                 <p>
-                  Orders can take weeks or months, and delays from backorders or shipping issues
-                  are pretty common.
+                  {t('whyChooseUs.bigBox.delays.description')}
                 </p>
               </li>
               <li style={{ marginTop: "12px" }}>
-                <strong>Missing or Damaged Pieces</strong>
+                <strong>{t('whyChooseUs.bigBox.damaged.title')}</strong>
                 <p>
-                  Cabinets often arrive incomplete or damaged, which means more waiting while
-                  replacements are ordered.
+                  {t('whyChooseUs.bigBox.damaged.description')}
                 </p>
               </li>
               <li style={{ marginTop: "12px" }}>
-                <strong>Hit-or-Miss Quality</strong>
+                <strong>{t('whyChooseUs.bigBox.quality.title')}</strong>
                 <p>
-                  Materials and construction can vary a lot, leading to uneven finishes, cheap
-                  hardware, or cabinets that don't hold up.
+                  {t('whyChooseUs.bigBox.quality.description')}
                 </p>
               </li>
               <li style={{ marginTop: "12px" }}>
-                <strong>Hard to Get Help</strong>
+                <strong>{t('whyChooseUs.bigBox.support.title')}</strong>
                 <p>
-                  With multiple vendors in the mix, getting straight answers or timely fixes
-                  can be frustrating.
+                  {t('whyChooseUs.bigBox.support.description')}
                 </p>
               </li>
             </ul>
 
             <div className="sms-highlight-box">
-              <strong>Skip the Hassle</strong>
+              <strong>{t('whyChooseUs.bigBox.callToAction')}</strong>
               <br /><br />
-              Avoid the delays and confusion that come with big-box cabinet orders. With us,
-              you work directly with the people building and installing your cabinets so things
-              get done right the first time.
+              {t('whyChooseUs.bigBox.callToActionText')}
             </div>
           </Collapsible>
 
@@ -182,7 +175,7 @@ const WhyChooseUs = () => {
             </div>
           </Collapsible>
         </div>
-      </div>
+      </main>
       <div style={{ height: "3vh" }}></div>
       </div>
       <Footer />

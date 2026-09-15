@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Smartphone, RotateCcw, Loader2, AlertCircle, Camera } from 'lucide-react';
 import ARSceneExporter from './ARSceneExporter';
+import { useLanguage } from '../../contexts/LanguageContext';
+import '../css/designer.css';
 
 // Import model-viewer web component (needs to be registered)
 // This will be loaded dynamically to avoid SSR issues
@@ -27,6 +29,22 @@ const ARViewer = ({
   const [error, setError] = useState(null);
   const [arSupported, setArSupported] = useState(null);
   const modelViewerRef = useRef(null);
+  const dialogRef = useRef(null);
+  const { t } = useLanguage();
+
+  // Native <dialog>: inert background, Escape to close and focus returned to
+  // the button that opened it, all handled by the browser (WCAG 2.4.3, 4.1.2)
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (isOpen && dialog && !dialog.open) dialog.showModal();
+  }, [isOpen]);
+
+  // Close through the element, so the browser restores focus before unmounting
+  const requestClose = () => {
+    const dialog = dialogRef.current;
+    if (dialog && dialog.open) dialog.close();
+    else onClose();
+  };
 
   // Load model-viewer component on mount
   useEffect(() => {
@@ -78,7 +96,7 @@ const ARViewer = ({
     setIsExporting(false);
     
     if (exportError || !blob) {
-      setError('Failed to generate 3D model. Please try again.');
+      setError(t('designer.ar.exportError'));
       console.error('Export error:', exportError);
       return;
     }
@@ -100,28 +118,36 @@ const ARViewer = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-24 bg-black bg-opacity-75">
+    <dialog
+      ref={dialogRef}
+      onClose={onClose}
+      aria-labelledby="kd-ar-title"
+      className="kd-ar-dialog z-50"
+    >
       {/* Modal Container - max 65vh height, positioned below navbar */}
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl mx-4 overflow-hidden flex flex-col" style={{ maxHeight: '65vh' }}>
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-purple-100 rounded-lg">
-              <Camera className="w-5 h-5 text-purple-600" />
+              <Camera aria-hidden="true" className="w-5 h-5 text-purple-700" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-gray-900">View in AR</h2>
-              <p className="text-sm text-gray-500">
-                {activeRoom === 'kitchen' ? 'Kitchen' : 'Bathroom'} Design
+              <h2 id="kd-ar-title" className="text-xl font-bold text-gray-900">{t('designer.viewInAR')}</h2>
+              <p className="text-sm text-gray-700">
+                {t('designer.ar.roomDesign', {
+                  room: activeRoom === 'kitchen' ? t('designer.kitchen') : t('designer.bathroom')
+                })}
               </p>
             </div>
           </div>
           <button
-            onClick={onClose}
+            type="button"
+            onClick={requestClose}
             className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-            aria-label="Close"
+            aria-label={t('a11y.close')}
           >
-            <X className="w-6 h-6 text-gray-500" />
+            <X className="w-6 h-6 text-gray-700" />
           </button>
         </div>
 
@@ -139,13 +165,13 @@ const ARViewer = ({
               />
               
               {/* Loading UI */}
-              <div className="flex flex-col items-center justify-center py-8">
-                <Loader2 className="w-10 h-10 text-purple-600 animate-spin mb-3" />
+              <div className="flex flex-col items-center justify-center py-8" role="status">
+                <Loader2 aria-hidden="true" className="w-10 h-10 text-purple-700 animate-spin mb-3" />
                 <h3 className="text-base font-semibold text-gray-900 mb-1">
-                  Generating 3D Model...
+                  {t('designer.ar.generating')}
                 </h3>
-                <p className="text-gray-500 text-sm text-center max-w-md">
-                  Creating an optimized 3D model for AR viewing.
+                <p className="text-gray-700 text-sm text-center max-w-md">
+                  {t('designer.ar.generatingHint')}
                 </p>
               </div>
             </>
@@ -153,22 +179,23 @@ const ARViewer = ({
 
           {/* Error state */}
           {error && (
-            <div className="flex flex-col items-center justify-center py-8">
+            <div className="flex flex-col items-center justify-center py-8" role="alert">
               <div className="p-3 bg-red-100 rounded-full mb-3">
-                <AlertCircle className="w-6 h-6 text-red-600" />
+                <AlertCircle aria-hidden="true" className="w-6 h-6 text-red-700" />
               </div>
               <h3 className="text-base font-semibold text-gray-900 mb-1">
-                Export Failed
+                {t('designer.ar.exportFailed')}
               </h3>
-              <p className="text-gray-500 text-sm text-center max-w-md mb-4">
+              <p className="text-gray-700 text-sm text-center max-w-md mb-4">
                 {error}
               </p>
               <button
+                type="button"
                 onClick={handleRegenerate}
-                className="flex items-center gap-2 px-3 py-1.5 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 transition-colors"
+                className="flex items-center gap-2 px-3 py-1.5 bg-purple-700 text-white text-sm rounded-lg hover:bg-purple-800 transition-colors"
               >
-                <RotateCcw className="w-4 h-4" />
-                Try Again
+                <RotateCcw aria-hidden="true" className="w-4 h-4" />
+                {t('designer.ar.tryAgain')}
               </button>
             </div>
           )}
@@ -179,11 +206,11 @@ const ARViewer = ({
               {/* AR Support Info */}
               {arSupported === false && (
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 text-yellow-600 flex-shrink-0 mt-0.5" />
+                  <AlertCircle aria-hidden="true" className="w-4 h-4 text-yellow-800 flex-shrink-0 mt-0.5" />
                   <div>
-                    <h4 className="font-medium text-yellow-800 text-sm">AR Not Available</h4>
-                    <p className="text-xs text-yellow-700 mt-0.5">
-                      Your device doesn't support AR. You can still view the 3D model below.
+                    <h3 className="font-medium text-yellow-900 text-sm">{t('designer.ar.notAvailable')}</h3>
+                    <p className="text-xs text-yellow-900 mt-0.5">
+                      {t('designer.ar.notAvailableHint')}
                     </p>
                   </div>
                 </div>
@@ -205,47 +232,49 @@ const ARViewer = ({
                   loading="eager"
                 >
                   {/* AR Button - styled and positioned */}
-                  <button 
+                  <button
+                    type="button"
                     slot="ar-button"
-                    className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex items-center gap-2 px-5 py-2.5 bg-purple-600 text-white rounded-full shadow-lg hover:bg-purple-700 transition-all hover:scale-105 font-medium"
+                    className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex items-center gap-2 px-5 py-2.5 bg-purple-700 text-white rounded-full shadow-lg hover:bg-purple-800 transition-all hover:scale-105 font-medium"
                   >
-                    <Smartphone className="w-5 h-5" />
-                    View in Your Space
+                    <Smartphone aria-hidden="true" className="w-5 h-5" />
+                    {t('designer.ar.viewInSpace')}
                   </button>
                 </model-viewer>
               </div>
 
               {/* Compact Instructions */}
               <div className="bg-gray-50 rounded-lg p-4">
-                <div className="flex flex-wrap gap-6 text-sm text-gray-600">
-                  <span><strong>Rotate:</strong> Click & drag</span>
-                  <span><strong>Zoom:</strong> Scroll/pinch</span>
-                  <span><strong>AR:</strong> Tap button on mobile</span>
+                <div className="flex flex-wrap gap-6 text-sm text-gray-700">
+                  <span><strong>{t('designer.ar.rotateLabel')}</strong> {t('designer.ar.rotateHint')}</span>
+                  <span><strong>{t('designer.ar.zoomLabel')}</strong> {t('designer.ar.zoomHint')}</span>
+                  <span><strong>{t('designer.ar.arLabel')}</strong> {t('designer.ar.arHint')}</span>
                 </div>
               </div>
 
               {/* Action Buttons */}
               <div className="flex justify-end gap-3">
                 <button
+                  type="button"
                   onClick={handleRegenerate}
-                  className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  className="flex items-center gap-2 px-4 py-2 border border-gray-500 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
                 >
-                  <RotateCcw className="w-4 h-4" />
-                  Regenerate
+                  <RotateCcw aria-hidden="true" className="w-4 h-4" />
+                  {t('designer.ar.regenerate')}
                 </button>
                 <a
                   href={modelUrl}
                   download={`${activeRoom}-design.glb`}
                   className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
                 >
-                  Download 3D Model
+                  {t('designer.ar.download')}
                 </a>
               </div>
             </div>
           )}
         </div>
       </div>
-    </div>
+    </dialog>
   );
 };
 

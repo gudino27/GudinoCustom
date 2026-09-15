@@ -1,4 +1,6 @@
 import React from 'react';
+import { useLanguage } from '../../contexts/LanguageContext';
+import { getMediaTitle } from './mediaTitle';
 
 const API_BASE = process.env.REACT_APP_API_URL || "https://api.gudinocustom.com";
 
@@ -12,8 +14,10 @@ const Carousel3D = ({
   goToSlide,
   openModal,
   handleImageLoad,
-  radius = 350
+  radius = 350,
+  categoryName = ''
 }) => {
+  const { t } = useLanguage();
   const angleStep = photos.length > 0 ? 360 / photos.length : 0;
 
   return (
@@ -37,10 +41,16 @@ const Carousel3D = ({
           const imgSrc = `${API_BASE}${photo.thumbnail || photo.url}`;
           const fullSrc = `${API_BASE}${photo.url}`;
           const caption = "";
+          const label = getMediaTitle(photo) ||
+            t(isVideo ? 'portfolio.videoFallback' : 'portfolio.photoFallback', {
+              category: categoryName,
+              n: i + 1
+            });
 
           return (
-            <div
+            <button
               key={`${photo.id || i}`}
+              type="button"
               className={`carousel-item-3d ${i === currentIndex ? "active" : ""} ${isVideo ? "video-item" : ""}`}
               style={{
                 transform: `rotateY(${itemAngle}deg) translateZ(${radius}px)`,
@@ -52,16 +62,19 @@ const Carousel3D = ({
                 height: "200px",
                 marginLeft: "-200px",
                 marginTop: "-100px",
+                padding: 0,
+                border: "none",
                 backgroundColor: "transparent",
               }}
               data-orientation="landscape"
-              onClick={() => openModal(fullSrc, caption, isVideo)}
+              aria-haspopup="dialog"
+              onClick={() => openModal(fullSrc, label, isVideo)}
             >
               {isVideo ? (
-                <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+                <span style={{ position: 'relative', display: 'block', width: '100%', height: '100%' }}>
                   <img
                     src={imgSrc}
-                    alt={caption}
+                    alt={label}
                     loading="lazy"
                     width="400"
                     height="300"
@@ -75,7 +88,7 @@ const Carousel3D = ({
                     }}
                   />
                   {/* Video play icon overlay */}
-                  <div style={{
+                  <span style={{
                     position: 'absolute',
                     top: '50%',
                     left: '50%',
@@ -89,15 +102,16 @@ const Carousel3D = ({
                     justifyContent: 'center',
                     pointerEvents: 'none'
                   }}>
-                    <svg width="30" height="30" viewBox="0 0 24 24" fill="white">
+                    <svg width="30" height="30" viewBox="0 0 24 24" fill="white" aria-hidden="true" focusable="false">
                       <path d="M8 5v14l11-7z"/>
                     </svg>
-                  </div>
-                </div>
+                  </span>
+                  {getMediaTitle(photo) && <span className="sr-only">{t('portfolio.video')}</span>}
+                </span>
               ) : (
                 <img
                   src={imgSrc}
-                  alt={caption}
+                  alt={label}
                   loading={i === 0 ? "eager" : "lazy"}
                   width="400"
                   height="300"
@@ -111,26 +125,29 @@ const Carousel3D = ({
                   }}
                 />
               )}
-              <div className="caption">{caption}</div>
-            </div>
+              <span className="caption">{caption}</span>
+            </button>
           );
         })}
       </div>
 
       <div className="dots-3d-container" id="dots3dContainer">
         {photos.map((_, i) => (
-          <span
+          <button
             key={i}
+            type="button"
             className={`dot-3d ${i === currentIndex ? "active" : ""}`}
+            aria-label={t('portfolio.goToPhoto', { n: i + 1 })}
+            aria-current={i === currentIndex ? 'true' : undefined}
             onClick={() => goToSlide(i)}
-          ></span>
+          ></button>
         ))}
       </div>
 
       {photos.length > 0 && (
         <div className="carousel-hint">
-          <span className="desktop-hint">← → arrow keys or swipe to navigate photos</span>
-          <span className="mobile-hint">← Swipe to browse →</span>
+          <span className="desktop-hint">{t('portfolio.carouselHintDesktop')}</span>
+          <span className="mobile-hint">{t('portfolio.carouselHintMobile')}</span>
         </div>
       )}
     </div>

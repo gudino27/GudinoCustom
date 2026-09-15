@@ -16,6 +16,11 @@ export const useWallManagement = ({
   isDoorMode,
   setIsDoorMode,
   setShowFloorPlanPresets,
+  // Translation helper and the on-screen message callback; both optional so the
+  // hook still works untranslated if another screen reuses it.
+  t = (key, fallback) => (typeof fallback === "string" ? fallback : key),
+  notify,
+  getWallLabel = getWallName,
 }) => {
 
   const addWall = (wallNumber) => {
@@ -32,7 +37,8 @@ export const useWallManagement = ({
 
   const removeWall = (wallNumber) => {
     if (wallRemovalDisabled) {
-      alert("Wall removal service is temporarily disabled.");
+      // Inline message instead of alert() (WCAG 3.3.1 / 4.1.3)
+      if (notify) notify(t("designer.wallRemovalPaused"), "error");
       return;
     }
     const currentWalls = currentRoomData.walls || [1, 2, 3, 4];
@@ -52,12 +58,17 @@ export const useWallManagement = ({
       // Determine if there will be a cost
       const willHaveCost = isOriginalWall || existedPrior;
       const costMessage = willHaveCost
-        ? ` This will cost $${wallPricing.removeWall}.`
-        : " This is free (wall never existed or was custom-added).";
+        ? t("designer.wallRemovalCost", { price: wallPricing.removeWall })
+        : t("designer.wallRemovalFree");
 
-      let confirmMessage = `Remove ${getWallName(wallNumber)}?${costMessage}`;
+      let confirmMessage = `${t("designer.confirmRemoveWall", {
+        wall: getWallLabel(wallNumber),
+      })} ${costMessage}`;
       if (elementsOnWall.length > 0) {
-        confirmMessage = `Wall ${wallNumber} has ${elementsOnWall.length} cabinet(s) on it. Removing the wall will also remove these cabinets.${costMessage} Continue?`;
+        confirmMessage = `${t("designer.confirmRemoveWallWithItems", {
+          wall: getWallLabel(wallNumber),
+          count: elementsOnWall.length,
+        })} ${costMessage}`;
       }
 
       if (window.confirm(confirmMessage)) {

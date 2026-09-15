@@ -1,23 +1,28 @@
- * {
+/* Scoped to the About page. These rules used to be global (`*`, `body`,
+   `.container`, `.hero-section`, `.loading-spinner`, `.error-message` …) and
+   leaked into every page that was opened after /about. */
+ .about-page,
+ .about-page * {
      margin: 0;
      padding: 0;
      box-sizing: border-box;
  }
 
  body {
-     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-     line-height: 1.6;
-     color: #333;
      background-color: rgb(110, 110, 110);
  }
 
- .container {
+ .about-page {
+     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+     line-height: 1.6;
+     color: #333;
+     width: 100%;
      max-width: 1200px;
      margin: 0 auto;
      padding: 20px;
  }
 
- .hero-section {
+ .about-hero {
      background: linear-gradient(135deg, #414141 0%, #000000 100%);
      color: rgb(255, 255, 255);
      padding: 20px 20px;
@@ -30,14 +35,14 @@
      min-height: 0px;
  }
 
- .hero-section h1 {
+ .about-hero h1 {
      font-size: 3rem;
      margin-bottom: 20px;
      animation: fadeInUp 0.8s ease-out;
      display: block;
  }
 
- .hero-section p {
+ .about-hero p {
      font-size: 1.25rem;
      opacity: 0.9;
      max-width: 600px;
@@ -46,7 +51,7 @@
      animation-fill-mode: both;
  }
 
- .section-title {
+ .about-section-title {
 
      text-align: center;
      margin-bottom: 50px;
@@ -56,13 +61,13 @@
 
  }
 
- .section-title h2 {
+ .about-section-title h2 {
      font-size: 2.5rem;
      color: rgb(253, 253, 253);
      margin-bottom: 10px;
  }
 
- .section-title p {
+ .about-section-title p {
      color: #ffffff;
      font-size: 1.1rem;
  }
@@ -129,7 +134,7 @@
  }
 
  .member-position {
-     color: #3b82f6;
+     color: #1d4ed8;
      font-weight: 500;
      margin-bottom: 15px;
  }
@@ -147,20 +152,20 @@
      font-size: 0.9rem;
  }
 
- .contact-item {
+ .about-contact-item {
      display: flex;
      align-items: center;
      gap: 5px;
      color: #4b5563;
  }
 
- .contact-item svg {
+ .about-contact-item svg {
      width: 16px;
      height: 16px;
      color: #9ca3af;
  }
 
- .company-info {
+ .about-company-info {
      background: linear-gradient(315deg, #414141 0%, #000000 85%);
      border-radius: 12px;
      padding: 20px 20px;
@@ -169,25 +174,25 @@
      text-align: center;
  }
 
- .company-info h3 {
+ .about-company-info h2 {
      color: #ffffff;
      margin-bottom: 20px;
      font-size: 1.8rem;
  }
 
- .company-info p {
+ .about-company-info p {
      color: #ffffff;
      line-height: 1.8;
      margin-bottom: 15px;
  }
 
- .loading {
+ .about-loading {
      text-align: center;
      padding: 60px;
-     color: #6b7280;
+     color: #ffffff;
  }
 
- .loading-spinner {
+ .about-loading-spinner {
      display: inline-block;
      width: 40px;
      height: 40px;
@@ -210,7 +215,7 @@
      }
  }
 
- .error-message {
+ .about-error {
      background: #fee;
      color: #c00;
      padding: 20px;
@@ -268,7 +273,7 @@
  }
 
  .testimonial-stars {
-     color: #fbbf24;
+     color: #b45309;
      font-size: 1.2rem;
      margin-bottom: 15px;
  }
@@ -298,6 +303,33 @@
      display: flex;
      align-items: center;
      justify-content: center;
+ }
+
+ /* The photo opens the viewer, so it is a button (WCAG 2.1.1) */
+ .testimonial-photo-btn {
+     position: relative;
+     display: block;
+     width: 100%;
+     height: 100%;
+     align-self: stretch;
+     border: 0;
+     background: none;
+     cursor: pointer;
+ }
+
+ /* inset ring: the container clips anything drawn outside it */
+ .testimonial-photo-btn:focus-visible {
+     outline: 3px solid #1d4ed8;
+     outline-offset: -3px;
+ }
+
+ .testimonial-photo-btn:focus-visible::after {
+     content: '';
+     position: absolute;
+     inset: 3px;
+     border: 2px solid #ffffff;
+     border-radius: 5px;
+     pointer-events: none;
  }
 
  /* Portrait images - taller than wide */
@@ -388,7 +420,7 @@
  }
 
  .project-type {
-     color: #3b82f6;
+     color: #1d4ed8;
      font-size: 0.875rem;
      font-weight: 500;
  }
@@ -411,8 +443,101 @@
      font-size: 1.1rem;
  }
 
+ /* Testimonial photo viewer (native modal dialog) */
+ .about-viewer {
+     position: fixed;
+     inset: 0;
+     width: 100%;
+     height: 100%;
+     max-width: 100%;
+     max-height: 100%;
+     margin: 0;
+     padding: 0.5rem;
+     border: 0;
+     overflow: hidden;
+     background-color: rgba(0, 0, 0, 0.95);
+ }
+
+ .about-viewer[open] {
+     display: flex;
+     align-items: center;
+     justify-content: center;
+ }
+
+ .about-viewer::backdrop {
+     background-color: rgba(0, 0, 0, 0.95);
+ }
+
+ .about-viewer-btn {
+     position: absolute;
+     background: rgba(0, 0, 0, 0.7);
+     border: none;
+     color: white;
+     font-size: 1.75rem;
+     line-height: 1;
+     width: 2.5rem;
+     height: 2.5rem;
+     border-radius: 50%;
+     cursor: pointer;
+     display: flex;
+     align-items: center;
+     justify-content: center;
+     z-index: 10;
+     touch-action: manipulation;
+ }
+
+ .about-viewer-close {
+     top: 0.5rem;
+     right: 0.5rem;
+ }
+
+ .about-viewer-prev {
+     left: 0.5rem;
+     top: 50%;
+     transform: translateY(-50%);
+ }
+
+ .about-viewer-next {
+     right: 0.5rem;
+     top: 50%;
+     transform: translateY(-50%);
+ }
+
+ .about-viewer-figure {
+     position: relative;
+     max-width: 95vw;
+     max-height: 90vh;
+     display: flex;
+     align-items: center;
+     justify-content: center;
+ }
+
+ .about-viewer-figure img {
+     max-width: 100%;
+     max-height: 90vh;
+     width: auto;
+     height: auto;
+     object-fit: contain;
+     border-radius: 8px;
+     touch-action: pan-y pinch-zoom;
+     user-select: none;
+ }
+
+ .about-viewer-counter {
+     position: absolute;
+     bottom: 1rem;
+     left: 50%;
+     transform: translateX(-50%);
+     background: rgba(0, 0, 0, 0.8);
+     color: white;
+     padding: 0.5rem 1rem;
+     border-radius: 20px;
+     font-size: 0.875rem;
+     white-space: nowrap;
+ }
+
  @media (max-width: 768px) {
-     .hero-section h1 {
+     .about-hero h1 {
          font-size: 2rem;
      }
 
@@ -486,27 +611,27 @@
 
 /* Small mobile devices - iPhone SE, Galaxy S8/S9 */
 @media (max-width: 375px) {
-    .container {
+    .about-page {
         padding: 15px;
     }
 
-    .hero-section {
+    .about-hero {
         padding: 15px;
     }
 
-    .hero-section h1 {
+    .about-hero h1 {
         font-size: 1.75rem;
     }
 
-    .hero-section p {
+    .about-hero p {
         font-size: 1rem;
     }
 
-    .section-title {
+    .about-section-title {
         padding: 15px;
     }
 
-    .section-title h2 {
+    .about-section-title h2 {
         font-size: 1.5rem;
     }
 

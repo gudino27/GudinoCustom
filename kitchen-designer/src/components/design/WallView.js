@@ -15,7 +15,12 @@ const WallView = ({
   getElementsOnWall,
   handleMouseMove,
   handleMouseUp,
-  handleWallViewMouseDown
+  handleWallViewMouseDown,
+  // Keyboard support; only wired up by the designer page
+  onElementKeyDown,
+  getElementLabel,
+  describedBy,
+  wallLabel
 }) => {
   const wall = wallNum || selectedWall;
   
@@ -44,6 +49,8 @@ const WallView = ({
       width={wallWidth * calculatedViewScale + 100}
       height={wallHeight * calculatedViewScale + 60}
       ref={wallNum ? null : wallViewRef}
+      role={onElementKeyDown ? 'group' : undefined}
+      aria-label={onElementKeyDown ? wallLabel : undefined}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
@@ -198,8 +205,19 @@ const WallView = ({
         const isWallCabinet = element.type === 'wall' || element.type === 'medicine';
         const isSelected = element.id === selectedElement;
 
+        // Keyboard access (WCAG 2.1.1): only when the page wires up a key handler
+        const keyboardProps = onElementKeyDown ? {
+          tabIndex: 0,
+          role: 'button',
+          'aria-pressed': isSelected,
+          'aria-label': getElementLabel ? getElementLabel(element) : undefined,
+          'aria-describedby': describedBy,
+          className: 'kd-el',
+          onKeyDown: (e) => onElementKeyDown(e, element.id)
+        } : {};
+
         return (
-          <g key={element.id}>
+          <g key={element.id} data-wall-element-id={element.id} {...keyboardProps}>
             {/* Main element rectangle with enhanced styling */}
             <defs>
               <linearGradient id={`cabinetGradient-${element.id}`} x1="0%" y1="0%" x2="100%" y2="100%">
@@ -1859,6 +1877,23 @@ const WallView = ({
             <text x={50 + x * calculatedViewScale + (width * calculatedViewScale) / 2} y={30 + yPos * calculatedViewScale - 7} textAnchor="middle" fontSize="8" fontWeight="bold">
               {currentRoomData.elements.indexOf(element) + 1}
             </text>
+
+            {/* Keyboard focus ring (hidden by default so it stays out of the PDF) */}
+            {onElementKeyDown && (
+              <rect
+                className="kd-focus-ring"
+                x={50 + x * calculatedViewScale - 4}
+                y={30 + yPos * calculatedViewScale - 4}
+                width={width * calculatedViewScale + 8}
+                height={height * calculatedViewScale + 8}
+                fill="none"
+                stroke="#1d4ed8"
+                strokeWidth="3"
+                rx="3"
+                opacity="0"
+                pointerEvents="none"
+              />
+            )}
           </g>
         );
       })}

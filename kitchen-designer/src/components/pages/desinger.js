@@ -9,6 +9,10 @@ import {
 import ARViewer from "../design/ARViewer";
 import MainNavBar from "../ui/Navigation";
 import SEO from "../ui/SEO";
+import { announce } from "../ui/LiveRegion";
+import { useLanguage } from "../../contexts/LanguageContext";
+import { getElementName } from "../design/elementName";
+import "../css/designer.css";
 import WallView from "../design/WallView";
 import DraggableCabinet from "../design/DraggableCabinet";
 import DesignerSidebar from "../design/DesignerSidebar";
@@ -41,7 +45,6 @@ import { getEventCoordinates } from "../../utils/designer/coordinateUtils";
 import { snapToCabinet, snapToWall } from "../../utils/designer/snappingUtils";
 import { snapCabinetToCustomWall } from "../../utils/designer/customWallUtils";
 import {
-  getWallName,
   getDoorTypes,
   getElementsOnWall,
   getCustomWallByNumber,
@@ -67,6 +70,7 @@ import { useZoomControls } from "../../hooks/designer/useZoomControls";
 const KitchenDesigner = () => {
   const { dragCacheRef, canvasRef, floorPlanRef, wallViewRef, cameraRef } =
     useDesignerRefs();
+  const { t, currentLanguage } = useLanguage();
 
   // Analytics tracking
   useAnalytics("/designer");
@@ -172,6 +176,18 @@ const KitchenDesigner = () => {
     properties: false,
   });
   const [rotationStart, setRotationStart] = useState(null); // Start point for wall rotation
+  // Inline status / error message shown instead of alert() (WCAG 3.3.1, 4.1.3)
+  const [notice, setNotice] = useState(null); // { text, tone: 'info' | 'error' }
+  const [panelFocusRequest, setPanelFocusRequest] = useState(false); // keyboard opened the panel
+  const panelReturnFocusRef = useRef(null); // element to focus when the panel closes
+  const layoutHeadingRef = useRef(null);
+  // Step 1 -> step 2 keeps the same URL, so move focus to the new heading
+  // instead of leaving it on a button that no longer exists (WCAG 2.4.3)
+  useEffect(() => {
+    if (step === "design" && layoutHeadingRef.current) {
+      layoutHeadingRef.current.focus();
+    }
+  }, [step]);
   // -----------------------------
   // Client Information for Quote Generation
   // Stores customer contact details and preferences
@@ -198,6 +214,23 @@ const KitchenDesigner = () => {
   const customWalls = currentRoomData.customWalls || [];
   const allAvailableWalls = currentRoomData.allAvailableWalls || [1, 2, 3, 4];
   const originalWalls = currentRoomData.originalWalls || [1, 2, 3, 4];
+
+  // Show a message on screen and read it out through the shared live region
+  const notify = (text, tone = "info") => {
+    setNotice({ text, tone });
+    announce(text);
+  };
+
+  // Translated wall names (the util in utils/designer is English only)
+  const getWallLabel = (wallNum) => {
+    const names = {
+      1: t("designer.wall.north"),
+      2: t("designer.wall.east"),
+      3: t("designer.wall.south"),
+      4: t("designer.wall.west"),
+    };
+    return names[wallNum] || t("designer.wall.custom", { n: wallNum });
+  };
 
   // -----------------------------
   // Custom Hooks (after all state is declared)
@@ -405,6 +438,8 @@ const KitchenDesigner = () => {
     scale,
     setSelectedElement,
     getDoorClearanceZones,
+    onDoorClearanceWarning: () =>
+      notify(t("designer.notice.doorClearance"), "error"),
   });
 
   // Wall management hook
@@ -426,6 +461,9 @@ const KitchenDesigner = () => {
     getCurrentWallAngle,
     markWallAsNonExistentPrior,
   } = useWallMgmt({
+    t,
+    notify,
+    getWallLabel: (wallNum) => getWallLabel(wallNum),
     currentRoomData,
     setCurrentRoomData,
     customWalls,
@@ -499,9 +537,9 @@ const KitchenDesigner = () => {
   if (pricesLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading cabinet designer...</p>
+        <div className="text-center" role="status">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-700 mx-auto"></div>
+          <p className="mt-4 text-gray-700">{t("designer.loading")}</p>
         </div>
       </div>
     );
@@ -926,6 +964,243 @@ const KitchenDesigner = () => {
   };
 
   // -----------------------------
+  // Keyboard model for placed cabinets and appliances
+  // Tab to an item, arrow keys move it, Enter edits it, Delete removes it.
+  // This is the keyboard equivalent of dragging (WCAG 2.1.1, 2.5.7).
+  // -----------------------------
+  const toInches = (px) => Math.round((px / scale) * 10) / 10;
+
+  const elementName = (element) =>
+    getElementName(t, element.type, elementTypes);
+
+  const elementNumber = (element) =>
+    currentRoomData.elements.indexOf(element) + 1;
+
+  // Footprint as drawn, so a rotated item is bounded by what you can see
+  const getFootprint = (element) => {
+    const turned = element.rotation % 180 !== 0;
+    return {
+      width: (turned ? element.depth : element.width) * scale,
+      depth: (turned ? element.width : element.depth) * scale,
+    };
+  };
+
+  const clampToRoom = (element, x, y) => {
+    const { width, depth } = getFootprint(element);
+    const roomWidth = parseFloat(currentRoomData.dimensions.width) * 12 * scale;
+    const roomHeight =
+      parseFloat(currentRoomData.dimensions.height) * 12 * scale;
+    return {
+      x: Math.max(0, Math.min(x, roomWidth - width)),
+      y: Math.max(0, Math.min(y, roomHeight - depth)),
+    };
+  };
+
+  // Same limits the drag uses: door clearance and other cabinets
+  const isBlockedAt = (element, x, y) => {
+    const { width, depth } = getFootprint(element);
+    return (
+      checkDoorClearanceCollision(x, y, width, depth) ||
+      checkElementCollision(
+        x,
+        y,
+        width,
+        depth,
+        element,
+        currentRoomData.elements,
+        elementTypes,
+        scale
+      )
+    );
+  };
+
+  const getElementLabel = (element) =>
+    t("designer.cabinetLabel", {
+      name: elementName(element),
+      n: elementNumber(element),
+      x: toInches(element.x),
+      y: toInches(element.y),
+      rotation: element.rotation || 0,
+    });
+
+  const getWallItemLabel = (element) => {
+    const spec = elementTypes[element.type];
+    return t("designer.wallItemLabel", {
+      name: elementName(element),
+      n: elementNumber(element),
+      height:
+        element.actualHeight || spec?.fixedHeight || spec?.defaultHeight || 0,
+      mount: Math.round(element.mountHeight || 0),
+    });
+  };
+
+  const setElementPosition = (elementId, x, y) => {
+    setCurrentRoomData((prevData) => ({
+      ...prevData,
+      elements: prevData.elements.map((el) =>
+        el.id === elementId ? { ...el, x, y } : el
+      ),
+    }));
+  };
+
+  // Typed position, from the properties panel
+  const handlePositionChange = (elementId, axis, inches) => {
+    const element = currentRoomData.elements.find((el) => el.id === elementId);
+    if (!element || Number.isNaN(inches)) return;
+    const target = clampToRoom(
+      element,
+      axis === "x" ? inches * scale : element.x,
+      axis === "y" ? inches * scale : element.y
+    );
+    setElementPosition(elementId, target.x, target.y);
+  };
+
+  const nudgeElement = (element, dxInches, dyInches) => {
+    const target = clampToRoom(
+      element,
+      (Math.round(element.x / scale) + dxInches) * scale,
+      (Math.round(element.y / scale) + dyInches) * scale
+    );
+    const name = elementName(element);
+    if (
+      isBlockedAt(element, target.x, target.y) &&
+      !isBlockedAt(element, element.x, element.y)
+    ) {
+      announce(t("designer.moveBlocked", { name }));
+      return;
+    }
+    setSelectedElement(element.id);
+    setElementPosition(element.id, target.x, target.y);
+    announce(
+      t("designer.moved", {
+        name,
+        x: toInches(target.x),
+        y: toInches(target.y),
+      })
+    );
+  };
+
+  const changeMountHeight = (element, deltaInches) => {
+    const spec = elementTypes[element.type];
+    if (!spec || spec.mountHeight === undefined) return;
+    const height =
+      element.actualHeight || spec.fixedHeight || spec.defaultHeight || 0;
+    const maxMount = Math.max(
+      0,
+      parseFloat(currentRoomData.dimensions.wallHeight) - height
+    );
+    const next = Math.max(
+      0,
+      Math.min(maxMount, Math.round(element.mountHeight || 0) + deltaInches)
+    );
+    setSelectedElement(element.id);
+    updateElement(element.id, { mountHeight: next });
+    announce(
+      t("designer.mountMoved", { name: elementName(element), mount: next })
+    );
+  };
+
+  // Open the properties panel and remember where focus should go back to
+  const openElementProperties = (elementId, returnFocusEl) => {
+    panelReturnFocusRef.current = returnFocusEl || null;
+    setSelectedElement(elementId);
+    setIsPanelOpen(true);
+    setPanelFocusRequest(true);
+  };
+
+  // The same item is a <g> on the floor plan and a different <g> in the wall
+  // elevation, so look for whichever one is on screen right now
+  const findElementNode = (elementId) =>
+    elementId
+      ? document.querySelector(
+          `[data-element-id="${elementId}"], [data-wall-element-id="${elementId}"]`
+        )
+      : null;
+
+  const restoreFocusAfterPanel = (closedElementId) => {
+    const returnTo = panelReturnFocusRef.current;
+    panelReturnFocusRef.current = null;
+    requestAnimationFrame(() => {
+      if (returnTo && document.contains(returnTo)) {
+        returnTo.focus();
+        return;
+      }
+      const onCanvas = findElementNode(closedElementId);
+      if (onCanvas && onCanvas.focus) {
+        onCanvas.focus();
+        return;
+      }
+      if (layoutHeadingRef.current) layoutHeadingRef.current.focus();
+    });
+  };
+
+  const closePropertiesPanel = (options = {}) => {
+    const closedId = selectedElement;
+    setSelectedElement(null);
+    setIsPanelOpen(false);
+    if (options.restoreFocus) restoreFocusAfterPanel(closedId);
+    else panelReturnFocusRef.current = null;
+  };
+
+  // Remove an item and keep keyboard focus somewhere sensible
+  const removeElementWithFocus = (element) => {
+    const list = currentRoomData.elements;
+    const index = list.findIndex((el) => el.id === element.id);
+    const neighbour = list[index + 1] || list[index - 1] || null;
+    deleteElement(element.id);
+    announce(t("designer.removed", { name: elementName(element) }));
+    requestAnimationFrame(() => {
+      const next = neighbour && findElementNode(neighbour.id);
+      if (next && next.focus) next.focus();
+      else if (layoutHeadingRef.current) layoutHeadingRef.current.focus();
+    });
+  };
+
+  const handleElementKeyDown = (e, elementId) => {
+    const element = currentRoomData.elements.find((el) => el.id === elementId);
+    if (!element) return;
+    const step = e.shiftKey ? 12 : 1; // inches
+
+    if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") {
+      e.preventDefault();
+      openElementProperties(elementId, e.currentTarget);
+    } else if (e.key.startsWith("Arrow")) {
+      e.preventDefault();
+      const dx =
+        e.key === "ArrowLeft" ? -step : e.key === "ArrowRight" ? step : 0;
+      const dy = e.key === "ArrowUp" ? -step : e.key === "ArrowDown" ? step : 0;
+      nudgeElement(element, dx, dy);
+    } else if (e.key === "Delete" || e.key === "Backspace") {
+      e.preventDefault();
+      removeElementWithFocus(element);
+    } else if (e.key === "Escape" && selectedElement === elementId) {
+      e.preventDefault();
+      setSelectedElement(null);
+    }
+  };
+
+  // Wall elevation view: up/down change how high a wall item is mounted
+  const handleWallElementKeyDown = (e, elementId) => {
+    const element = currentRoomData.elements.find((el) => el.id === elementId);
+    if (!element) return;
+    const step = e.shiftKey ? 12 : 1; // inches
+
+    if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") {
+      e.preventDefault();
+      openElementProperties(elementId, e.currentTarget);
+    } else if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+      e.preventDefault();
+      changeMountHeight(element, e.key === "ArrowUp" ? step : -step);
+    } else if (e.key === "Delete" || e.key === "Backspace") {
+      e.preventDefault();
+      removeElementWithFocus(element);
+    } else if (e.key === "Escape" && selectedElement === elementId) {
+      e.preventDefault();
+      setSelectedElement(null);
+    }
+  };
+
+  // -----------------------------
   // Special Rendering Functions
   // Custom rendering for special cabinet types and visual effects
   // -----------------------------
@@ -950,6 +1225,7 @@ const KitchenDesigner = () => {
   // Wrapper function to call the PDF service
   const handleSendQuote = async () => {
     const result = await sendQuote({
+      t,
       clientInfo,
       kitchenData,
       bathroomData,
@@ -965,6 +1241,12 @@ const KitchenDesigner = () => {
     if (result?.success && result?.resetClientInfo) {
       setClientInfo(result.resetClientInfo);
     }
+    // Failures are announced by sendQuote; also show them on the page
+    if (result && !result.success && result.message) {
+      notify(result.message, "error");
+    }
+    // Let the quote form show its own inline errors if it wants to
+    return result;
   };
   // -----------------------------
   // MAIN RENDER LOGIC
@@ -975,15 +1257,23 @@ const KitchenDesigner = () => {
   // Initial configuration screen where users input room measurements and select room type
   if (step === "dimensions") {
     return (
-      <DimensionsSetup
-        activeRoom={activeRoom}
-        switchRoom={switchRoom}
-        currentRoomData={currentRoomData}
-        setCurrentRoomData={setCurrentRoomData}
-        handleDimensionsSubmit={handleDimensionsSubmit}
-        kitchenData={kitchenData}
-        bathroomData={bathroomData}
-      />
+      <>
+        <SEO
+          title={t("seo.design.title")}
+          description={t("seo.design.description")}
+          keywords="kitchen design tool, free kitchen planner, cabinet designer, bathroom planner, online kitchen designer, 3D kitchen visualizer, cabinet layout tool"
+          canonical="https://gudinocustom.com/design"
+        />
+        <DimensionsSetup
+          activeRoom={activeRoom}
+          switchRoom={switchRoom}
+          currentRoomData={currentRoomData}
+          setCurrentRoomData={setCurrentRoomData}
+          handleDimensionsSubmit={handleDimensionsSubmit}
+          kitchenData={kitchenData}
+          bathroomData={bathroomData}
+        />
+      </>
     );
   }
   // STEP 2: Main Design Interface
@@ -991,32 +1281,70 @@ const KitchenDesigner = () => {
   return (
     <>
       <SEO
-        title="Kitchen Designer Tool - Plan Your Dream Kitchen Free"
-        description="Free online kitchen and bathroom design tool. Drag and drop cabinets, customize your layout, get instant pricing, and visualize your dream space in 3D."
+        title={t("designer.layoutPageTitle", {
+          room:
+            activeRoom === "kitchen"
+              ? t("designer.kitchen")
+              : t("designer.bathroom"),
+        })}
+        description={t("seo.design.description")}
         keywords="kitchen design tool, free kitchen planner, cabinet designer, bathroom planner, online kitchen designer, 3D kitchen visualizer, cabinet layout tool"
         canonical="https://gudinocustom.com/design"
       />
       <MainNavBar />
-      <div className="min-h-screen bg-gray-100">
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="min-h-screen bg-gray-100 focus:outline-none"
+      >
         {/* ========== MOBILE HAMBURGER MENU ========== */}
         {/* Shows only on mobile and tablet when sidebar is collapsed */}
         {!sidebarCollapsed && isMobile && (
           <button
+            type="button"
             onClick={() => setSidebarCollapsed(true)}
             className="fixed top-20 left-4 z-50 lg:hidden bg-white rounded-lg shadow-lg p-3 hover:bg-gray-50 transition-colors"
-            aria-label="Close menu"
+            aria-label={t("designer.closeTools")}
+            aria-expanded={true}
+            aria-controls="kd-sidebar-content"
           >
             <X className="h-6 w-6 text-gray-700" />
           </button>
         )}
         {sidebarCollapsed && (isMobile || isTablet) && (
           <button
+            type="button"
             onClick={() => setSidebarCollapsed(false)}
             className="fixed top-20 left-4 z-50 lg:hidden bg-white rounded-lg shadow-lg p-3 hover:bg-gray-50 transition-colors"
-            aria-label="Open menu"
+            aria-label={t("designer.openTools")}
+            aria-expanded={false}
+            aria-controls="kd-sidebar-content"
           >
             <Menu className="h-6 w-6 text-gray-700" />
           </button>
+        )}
+
+        {/* Status / error messages that used to be alert() calls */}
+        {notice && (
+          <div
+            className="fixed top-24 left-1/2 z-50 -translate-x-1/2 transform rounded-lg px-4 py-3 shadow-lg flex items-start gap-3 bg-white border"
+            style={{
+              maxWidth: "90vw",
+              borderColor: notice.tone === "error" ? "#b91c1c" : "#1d4ed8",
+            }}
+          >
+            <p className={`text-sm ${notice.tone === "error" ? "text-red-700" : "text-gray-800"}`}>
+              {notice.text}
+            </p>
+            <button
+              type="button"
+              onClick={() => setNotice(null)}
+              className="text-gray-700 hover:text-gray-900 p-1 rounded-full hover:bg-gray-200"
+              aria-label={t("a11y.close")}
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
         )}
 
         <div className="flex h-screen">
@@ -1057,7 +1385,7 @@ const KitchenDesigner = () => {
             allAvailableWalls={allAvailableWalls}
             selectedWall={selectedWall}
             setSelectedWall={setSelectedWall}
-            getWallName={getWallName}
+            getWallName={getWallLabel}
             getCustomWallByNumber={(wallNum) =>
               getCustomWallByNumber(wallNum, customWalls)
             }
@@ -1106,15 +1434,26 @@ const KitchenDesigner = () => {
               {/* Title bar with room name and date */}
               <div className="flex justify-between items-start mb-6 border-b pb-4">
                 <div>
-                  <h2 className="text-2xl font-bold">
-                    {activeRoom === "kitchen" ? "Kitchen" : "Bathroom"} Layout
-                  </h2>
+                  <h1
+                    ref={layoutHeadingRef}
+                    tabIndex={-1}
+                    className="text-2xl font-bold focus:outline-none"
+                  >
+                    {t("designer.layoutHeading", {
+                      room:
+                        activeRoom === "kitchen"
+                          ? t("designer.kitchen")
+                          : t("designer.bathroom"),
+                    })}
+                  </h1>
                 </div>
                 <div className="text-right">
                   <p className="text-sm font-semibold">
-                    {new Date().toLocaleDateString()}
+                    {new Date().toLocaleDateString(currentLanguage)}
                   </p>
-                  <p className="text-xs text-gray-600">Not To Scale</p>
+                  <p className="text-xs text-gray-600">
+                    {t("designer.notToScale")}
+                  </p>
                 </div>
               </div>
               {/* Pricing Summary */}
@@ -1144,10 +1483,10 @@ const KitchenDesigner = () => {
                 />
               ) : viewMode === "floor" ? (
                 <>
-                  {/* Floor Plan Instructions */}
-                  <p className="text-sm text-gray-600 mb-4">
-                    Click and drag cabinets to position them. They will snap to
-                    walls and other cabinets.
+                  {/* Floor Plan Instructions (pointer and keyboard) */}
+                  <p id="kd-floor-help" className="text-sm text-gray-700 mb-4">
+                    {t("designer.floorInstructions")}{" "}
+                    {t("designer.keyboardHelp")}
                   </p>
                   {/* Floor Plan SVG Container */}
                   {/* Main interactive canvas for cabinet placement and arrangement */}
@@ -1155,6 +1494,9 @@ const KitchenDesigner = () => {
                     <svg
                       ref={canvasRef}
                       id="designer-canvas-svg"
+                      role="group"
+                      aria-label={t("designer.floorPlanLabel")}
+                      aria-describedby="kd-floor-help"
                       width={
                         parseFloat(currentRoomData.dimensions.width) *
                           12 *
@@ -1226,11 +1568,12 @@ const KitchenDesigner = () => {
                               );
                               ////console.log('Wall completed via mouseUp');
                             } else if (wallLength > 5) {
-                              // Only show alert if they actually tried to draw something
-                              alert(
-                                `Wall is too short (${wallLength.toFixed(
-                                  1
-                                )}px). Minimum length is ${minWallLength}px.`
+                              // Only warn if they actually tried to draw something
+                              notify(
+                                t("designer.wallTooShort", {
+                                  min: Math.ceil(minWallLength / scale),
+                                }),
+                                "error"
                               );
                             }
                             // Reset drawing state
@@ -1322,10 +1665,11 @@ const KitchenDesigner = () => {
                                 );
                                 // //console.log('Wall completed successfully');
                               } else {
-                                alert(
-                                  `Wall is too short (${wallLength.toFixed(
-                                    1
-                                  )}px). Minimum length is ${minWallLength}px.`
+                                notify(
+                                  t("designer.wallTooShort", {
+                                    min: Math.ceil(minWallLength / scale),
+                                  }),
+                                  "error"
                                 );
                               }
                               // Reset drawing state
@@ -1967,10 +2311,10 @@ const KitchenDesigner = () => {
                                     y={30 + (wall.y1 + wall.y2) / 2 + 20}
                                     textAnchor="middle"
                                     fontSize="8"
-                                    fill="#059669"
+                                    fill="#047857"
                                     fontWeight="bold"
                                   >
-                                    ✓ Existed Prior
+                                    {`✓ ${t("designer.existedPriorLabel")}`}
                                   </text>
                                 )}
                               </g>
@@ -2100,6 +2444,9 @@ const KitchenDesigner = () => {
                               selectedElement={selectedElement}
                               dragPreviewPosition={dragPreviewPosition}
                               onMouseDown={handleMouseDown}
+                              onKeyDown={handleElementKeyDown}
+                              ariaLabel={getElementLabel(element)}
+                              describedBy="kd-floor-help"
                               elementTypes={elementTypes}
                               renderCornerCabinet={renderCornerCabinet}
                               renderDoorGraphic={renderDoorGraphic}
@@ -2323,20 +2670,22 @@ const KitchenDesigner = () => {
                   {isMobile && viewMode === "floor" && (
                     <div className="fixed bottom-20 right-4 z-30 flex flex-col gap-2 lg:hidden">
                       <button
+                        type="button"
                         onClick={handleZoomIn}
                         className="bg-white rounded-lg shadow-lg p-3 hover:bg-gray-50 transition-colors"
-                        aria-label="Zoom in"
+                        aria-label={t("designer.zoomIn")}
                       >
                         <Plus className="h-6 w-6 text-gray-700" />
                       </button>
                       <button
+                        type="button"
                         onClick={handleZoomOut}
                         className="bg-white rounded-lg shadow-lg p-3 hover:bg-gray-50 transition-colors"
-                        aria-label="Zoom out"
+                        aria-label={t("designer.zoomOut")}
                       >
                         <Minus className="h-6 w-6 text-gray-700" />
                       </button>
-                      <div className="bg-white rounded-lg shadow-lg px-3 py-2 text-xs text-gray-600 text-center font-medium">
+                      <div className="bg-white rounded-lg shadow-lg px-3 py-2 text-xs text-gray-700 text-center font-medium">
                         {Math.round(scale * 100)}%
                       </div>
                     </div>
@@ -2346,9 +2695,14 @@ const KitchenDesigner = () => {
                 /* Wall Elevation View */
                 /* Alternative view showing cabinet placement on selected wall */
                 <div>
-                  <h3 className="text-lg font-semibold mb-4">
-                    Wall {selectedWall} Elevation View
-                  </h3>
+                  <h2 className="text-lg font-semibold mb-4">
+                    {t("designer.wallElevation", {
+                      wall: getWallLabel(selectedWall),
+                    })}
+                  </h2>
+                  <p id="kd-wall-help" className="text-sm text-gray-700 mb-4">
+                    {t("designer.wallViewKeyboardHelp")}
+                  </p>
                   <WallView
                     currentRoomData={currentRoomData}
                     selectedWall={selectedWall}
@@ -2362,6 +2716,10 @@ const KitchenDesigner = () => {
                     handleMouseMove={handleMouseMove}
                     handleMouseUp={handleMouseUp}
                     handleWallViewMouseDown={handleWallViewMouseDown}
+                    onElementKeyDown={handleWallElementKeyDown}
+                    getElementLabel={getWallItemLabel}
+                    describedBy="kd-wall-help"
+                    wallLabel={getWallLabel(selectedWall)}
                   />
                 </div>
               )}
@@ -2370,6 +2728,9 @@ const KitchenDesigner = () => {
                 currentRoomData={currentRoomData}
                 viewMode={viewMode}
                 elementTypes={elementTypes}
+                scale={scale}
+                selectedElement={selectedElement}
+                onSelectElement={openElementProperties}
               />
             </div>
           </div>
@@ -2377,12 +2738,14 @@ const KitchenDesigner = () => {
         {/* Mobile: Properties Button - appears when cabinet selected */}
         {selectedElement && isMobile && !isPanelOpen && (
           <button
-            onClick={() => setIsPanelOpen(true)}
-            className="fixed bottom-4 right-4 z-40 bg-blue-500 text-white rounded-full p-4 shadow-lg hover:bg-blue-600 active:bg-blue-700 active:scale-95 transition-all flex items-center justify-center gap-2"
+            type="button"
+            onClick={(e) => openElementProperties(selectedElement, e.currentTarget)}
+            className="fixed bottom-4 right-4 z-40 bg-blue-700 text-white rounded-full p-4 shadow-lg hover:bg-blue-800 active:bg-blue-800 active:scale-95 transition-all flex items-center justify-center gap-2"
             style={{ marginBottom: "env(safe-area-inset-bottom, 0px)" }}
-            aria-label="Open properties panel"
           >
             <svg
+              aria-hidden="true"
+              focusable="false"
               xmlns="http://www.w3.org/2000/svg"
               width="24"
               height="24"
@@ -2399,7 +2762,7 @@ const KitchenDesigner = () => {
               <path d="M1 12h6m6 0h6"></path>
               <path d="m4.2 19.8 4.2-4.2m5.6-5.6 4.2-4.2"></path>
             </svg>
-            <span className="font-medium">Properties</span>
+            <span className="font-medium">{t("designer.properties")}</span>
           </button>
         )}
 
@@ -2413,17 +2776,23 @@ const KitchenDesigner = () => {
             setCurrentRoomData={setCurrentRoomData}
             elementTypes={elementTypes}
             updateElement={updateElement}
-            deleteElement={deleteElement}
+            deleteElement={(elementId) => {
+              const element = currentRoomData.elements.find(
+                (el) => el.id === elementId
+              );
+              if (element) removeElementWithFocus(element);
+            }}
             rotateElement={rotateElement}
             rotateCornerCabinet={rotateCornerCabinet}
             materialMultipliers={materialMultipliers}
-            onClose={() => {
-              setSelectedElement(null);
-              setIsPanelOpen(false);
-            }}
+            scale={scale}
+            onPositionChange={handlePositionChange}
+            focusRequest={panelFocusRequest}
+            onFocusRequestHandled={() => setPanelFocusRequest(false)}
+            onClose={closePropertiesPanel}
           />
         )}
-      </div>
+      </main>
       {/* Quote Form Modal */}
       <QuoteForm
         isVisible={showQuoteForm}

@@ -26,7 +26,7 @@
   pointer-events: none;
 }
 
-.hero-content {
+.contact-hero-content {
   position: relative;
   z-index: 2;
   max-width: 800px;
@@ -70,8 +70,9 @@
   gap: 25px;
 }
 
+/* Dark glass: white text on 10% white over the gray page was only 4.15:1 */
 .contact-card {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.25);
   border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 20px;
   padding: 30px;
@@ -101,13 +102,13 @@
 .contact-card:hover {
   transform: translateY(-10px);
   box-shadow: 0 12px 48px rgba(31, 38, 135, 0.5);
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(0, 0, 0, 0.35);
 }
 
 .contact-card.hovered {
   transform: translateY(-10px);
   box-shadow: 0 12px 48px rgba(31, 38, 135, 0.5);
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(0, 0, 0, 0.35);
 }
 
 .card-icon {
@@ -116,11 +117,13 @@
   margin-bottom: 20px;
   color: #ffffff;
   transition: all 0.3s ease;
-  animation: iconPulse 2s ease-in-out infinite;
+  /* stops within 5s: decorative motion can't be paused otherwise (WCAG 2.2.2) */
+  animation: iconPulse 2s ease-in-out 2;
 }
 
 .contact-card:hover .card-icon {
-  color: #020202;
+  /* light accent: near-black vanished once the cards went dark */
+  color: #c7d2fe;
   transform: scale(1.1);
   animation: none;
 }
@@ -130,7 +133,7 @@
   height: 100%;
 }
 
-.card-content h3 {
+.card-content h2 {
   font-size: 1.4rem;
   font-weight: 600;
   margin-bottom: 10px;
@@ -184,16 +187,15 @@
   display: block;
 }
 
+/* Always visible: it used to appear on hover only (WCAG 1.4.13 / 2.1.1) */
 .card-action {
+  display: inline-block;
   font-size: 0.9rem;
   color: #ffffff;
   font-weight: 500;
-  opacity: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
   transition: opacity 0.3s ease;
-}
-
-.contact-card:hover .card-action {
-  opacity: 1;
 }
 
 /* Hours Card Special Styling */
@@ -205,7 +207,7 @@
 
 /* Map Section */
 .map-section {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.25);
   border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 20px;
   padding: 40px;
@@ -243,10 +245,10 @@
   align-items: center;
   justify-content: center;
   background: #f8f9fa;
-  color: #ffffff;
+  color: #374151;
 }
 
-.loading-spinner {
+.map-loading-spinner {
   width: 40px;
   height: 40px;
   border: 4px solid #e9ecef;
@@ -325,40 +327,42 @@
 
 
 
-.form-header {
+/* Form styles kept scoped to this page: unscoped they also restyled the
+   Quick Quote and Testimonial forms and removed their focus outline */
+.contact-container .form-header {
   text-align: center;
   margin-bottom: 40px;
 }
 
-.form-header h2 {
+.contact-container .form-header h2 {
   font-size: 2.2rem;
   font-weight: 600;
   color: #ffffff;
   margin-bottom: 10px;
 }
 
-.form-header p {
+.contact-container .form-header p {
   color: #ffffff;
   font-size: 1.1rem;
 }
 
-.contact-form {
+.contact-container .contact-form {
   max-width: 800px;
   margin: 0 auto;
 }
 
-.form-row {
+.contact-container .form-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 25px;
   margin-bottom: 25px;
 }
 
-.form-group {
+.contact-container .form-group {
   margin-bottom: 25px;
 }
 
-.form-group label {
+.contact-container .form-group label {
   display: block;
   font-weight: 600;
   color: #2d3748;
@@ -366,12 +370,12 @@
   font-size: 0.95rem;
 }
 
-.form-group input,
-.form-group select,
-.form-group textarea {
+.contact-container .form-group input,
+.contact-container .form-group select,
+.contact-container .form-group textarea {
   width: 100%;
   padding: 15px 18px;
-  border: 2px solid #e2e8f0;
+  border: 2px solid #767676;
   border-radius: 12px;
   font-size: 1rem;
   transition: all 0.3s ease;
@@ -379,16 +383,14 @@
   background: #f8f9fa;
 }
 
-.form-group input:focus,
-.form-group select:focus,
-.form-group textarea:focus {
-  outline: none;
+.contact-container .form-group input:focus,
+.contact-container .form-group select:focus,
+.contact-container .form-group textarea:focus {
   border-color: rgb(110, 110, 110);
   background: white;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 
-.form-group textarea {
+.contact-container .form-group textarea {
   resize: vertical;
   min-height: 120px;
 }
@@ -489,18 +491,19 @@
 
 /* Special hover effects for different card types - phone card excluded */
 
+/* the tint now sits on top of the dark glass so white text stays readable */
 .email-card:hover {
-  background: rgba(102, 126, 234, 0.2);
+  background: linear-gradient(rgba(102, 126, 234, 0.2), rgba(102, 126, 234, 0.2)), rgba(0, 0, 0, 0.25);
   border-color: rgba(102, 126, 234, 0.4);
 }
 
 .location-card:hover {
-  background: rgba(102, 126, 234, 0.2);
+  background: linear-gradient(rgba(102, 126, 234, 0.2), rgba(102, 126, 234, 0.2)), rgba(0, 0, 0, 0.25);
   border-color: rgba(102, 126, 234, 0.4);
 }
 
 .hours-card:hover {
-  background: rgba(102, 126, 234, 0.2);
+  background: linear-gradient(rgba(102, 126, 234, 0.2), rgba(102, 126, 234, 0.2)), rgba(0, 0, 0, 0.25);
   border-color: rgba(102, 126, 234, 0.4);
 }
 
@@ -532,7 +535,7 @@
   display: block;
   font-size: 0.85rem;
   font-weight: 600;
-  color: #9ca3af;
+  color: #f3f4f6;
   margin-bottom: 5px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -556,7 +559,7 @@
   display: inline-block;
   padding: 4px 8px;
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.35);
   border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
@@ -577,13 +580,13 @@
 .phone-card:hover {
   transform: none !important;
   box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37) !important;
-  background: rgba(255, 255, 255, 0.1) !important;
+  background: rgba(0, 0, 0, 0.25) !important;
 }
 
 .phone-card.hovered {
   transform: none !important;
   box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37) !important;
-  background: rgba(255, 255, 255, 0.1) !important;
+  background: rgba(0, 0, 0, 0.25) !important;
 }
 
 .phone-card:hover .card-icon {

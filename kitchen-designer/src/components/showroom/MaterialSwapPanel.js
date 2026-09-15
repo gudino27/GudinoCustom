@@ -1,15 +1,15 @@
 // MaterialSwapPanel - UI panel for selecting materials when swapping elements
 // Shows available materials for the selected element with thumbnails
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useId, useRef } from 'react';
 import { useLanguage } from '../../contexts/LanguageContext';
-import translations from '../../utils/translations';
 
 const MaterialSwapPanel = ({
+  id,
   element,
   currentMaterialId,
   onMaterialSelect,
   onClose,
-  language,
+  autoFocus = false,
   apiUrl
 }) => {
   const [materials, setMaterials] = useState([]);
@@ -17,7 +17,11 @@ const MaterialSwapPanel = ({
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [categories, setCategories] = useState([]);
 
-  const t = translations[language]?.showroom || translations.en.showroom;
+  const { t, currentLanguage } = useLanguage();
+  const headingRef = useRef(null);
+  const generatedId = useId();
+  const panelId = id || generatedId;
+  const headingId = `${panelId}-heading`;
 
   // Fetch available materials for this element
   useEffect(() => {
@@ -55,8 +59,22 @@ const MaterialSwapPanel = ({
     }
   }, [element, apiUrl]);
 
+  // When opened from the keyboard-reachable list, move focus into the panel
+  useEffect(() => {
+    if (autoFocus) {
+      headingRef.current?.focus({ preventScroll: true });
+    }
+  }, [autoFocus, element?.id]);
+
+  const handleKeyDown = (event) => {
+    if (event.key === 'Escape') {
+      event.stopPropagation();
+      onClose();
+    }
+  };
+
   // Get element name based on language
-  const elementName = language === 'es' ? element.element_name_es : element.element_name_en;
+  const elementName = currentLanguage === 'es' ? element.element_name_es : element.element_name_en;
 
   // Filter materials by category if selected
   const filteredMaterials = selectedCategory
@@ -65,34 +83,42 @@ const MaterialSwapPanel = ({
 
   // Get material name based on language
   const getMaterialName = (material) => {
-    return language === 'es' ? material.material_name_es : material.material_name_en;
+    return currentLanguage === 'es' ? material.material_name_es : material.material_name_en;
   };
 
   // Get category display name
   const getCategoryName = (slug) => {
     const material = materials.find(m => m.category_slug === slug);
     if (material) {
-      return language === 'es' ? material.category_name_es : material.category_name_en;
+      return currentLanguage === 'es' ? material.category_name_es : material.category_name_en;
     }
     return slug;
   };
 
   return (
-    <div className="absolute right-0 top-0 h-full w-80 bg-white/95 backdrop-blur-sm shadow-2xl z-20 flex flex-col">
+    <div
+      id={panelId}
+      role="region"
+      aria-labelledby={headingId}
+      onKeyDown={handleKeyDown}
+      className="absolute right-0 top-0 h-full w-80 bg-white/95 backdrop-blur-sm shadow-2xl z-20 flex flex-col"
+    >
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b bg-gray-50">
         <div>
-          <h3 className="font-semibold text-gray-900">
-            {t?.selectMaterial || 'Select Material'}
+          <h3 id={headingId} ref={headingRef} tabIndex={-1} className="font-semibold text-gray-900">
+            {t('showroom.selectMaterial')}
           </h3>
           <p className="text-sm text-gray-500">{elementName}</p>
         </div>
         <button
+          type="button"
           onClick={onClose}
           className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
-          title={t?.close || 'Close'}
+          title={t('a11y.close')}
+          aria-label={t('a11y.close')}
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg aria-hidden="true" focusable="false" className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
@@ -102,19 +128,23 @@ const MaterialSwapPanel = ({
       {categories.length > 1 && (
         <div className="flex gap-1 p-2 border-b overflow-x-auto">
           <button
+            type="button"
             onClick={() => setSelectedCategory(null)}
+            aria-pressed={!selectedCategory}
             className={`px-3 py-1.5 text-sm rounded-lg whitespace-nowrap transition-colors ${
               !selectedCategory
                 ? 'bg-amber-500 text-white'
                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
             }`}
           >
-            {t?.all || 'All'}
+            {t('showroom.all')}
           </button>
           {categories.map(cat => (
             <button
               key={cat}
+              type="button"
               onClick={() => setSelectedCategory(cat)}
+              aria-pressed={selectedCategory === cat}
               className={`px-3 py-1.5 text-sm rounded-lg whitespace-nowrap transition-colors ${
                 selectedCategory === cat
                   ? 'bg-amber-500 text-white'
@@ -131,34 +161,37 @@ const MaterialSwapPanel = ({
       <div className="flex-1 overflow-y-auto p-4">
         {loading ? (
           <div className="flex items-center justify-center h-32">
-            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-amber-500"></div>
+            <div aria-hidden="true" className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-amber-500"></div>
+            <span className="sr-only">{t('a11y.loading')}</span>
           </div>
         ) : filteredMaterials.length === 0 ? (
           <div className="text-center text-gray-500 py-8">
-            {t?.noMaterials || 'No materials available'}
+            {t('showroom.noMaterials')}
           </div>
         ) : (
           <div className="grid grid-cols-3 gap-3">
             {/* Original/None option - clears the material selection */}
             <button
+              type="button"
               onClick={() => onMaterialSelect(null)}
+              aria-pressed={!currentMaterialId}
               className={`relative aspect-square rounded-xl overflow-hidden border-2 transition-all ${
                 !currentMaterialId
                   ? 'border-amber-500 ring-2 ring-amber-200 scale-105'
                   : 'border-gray-200 hover:border-gray-400'
               }`}
-              title={language === 'es' ? 'Original' : 'Original'}
+              title={t('showroom.original')}
             >
               <div className="w-full h-full bg-gradient-to-br from-gray-100 to-gray-200 flex flex-col items-center justify-center">
-                <svg className="w-6 h-6 text-gray-400 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg aria-hidden="true" focusable="false" className="w-6 h-6 text-gray-400 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
                 <span className="text-xs text-gray-500 font-medium">
-                  {language === 'es' ? 'Original' : 'Original'}
+                  {t('showroom.original')}
                 </span>
               </div>
               {!currentMaterialId && (
-                <div className="absolute inset-0 bg-amber-500/20 flex items-center justify-center">
+                <div aria-hidden="true" className="absolute inset-0 bg-amber-500/20 flex items-center justify-center">
                   <div className="bg-amber-500 rounded-full p-1">
                     <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
@@ -170,6 +203,7 @@ const MaterialSwapPanel = ({
 
             {filteredMaterials.map((material) => {
               const isSelected = material.id === currentMaterialId;
+              const materialName = getMaterialName(material);
               const thumbnailUrl = material.thumbnail_url
                 ? (material.thumbnail_url.startsWith('http')
                     ? material.thumbnail_url
@@ -179,35 +213,42 @@ const MaterialSwapPanel = ({
               return (
                 <button
                   key={material.id}
+                  type="button"
                   onClick={() => onMaterialSelect(material.id)}
+                  aria-pressed={isSelected}
                   className={`relative aspect-square rounded-xl overflow-hidden border-2 transition-all ${
                     isSelected
                       ? 'border-amber-500 ring-2 ring-amber-200 scale-105'
                       : 'border-gray-200 hover:border-gray-400'
                   }`}
-                  title={getMaterialName(material)}
+                  title={materialName}
                 >
                   {/* Thumbnail or color swatch */}
                   {thumbnailUrl ? (
                     <img
                       src={thumbnailUrl}
-                      alt={getMaterialName(material)}
+                      alt={materialName}
                       className="w-full h-full object-cover"
                     />
                   ) : material.color_hex ? (
-                    <div
-                      className="w-full h-full"
-                      style={{ backgroundColor: material.color_hex }}
-                    />
+                    <>
+                      <div
+                        aria-hidden="true"
+                        className="w-full h-full"
+                        style={{ backgroundColor: material.color_hex }}
+                      />
+                      <span className="sr-only">{materialName}</span>
+                    </>
                   ) : (
                     <div className="w-full h-full bg-gray-200 flex items-center justify-center">
-                      <span className="text-gray-400 text-xs">?</span>
+                      <span aria-hidden="true" className="text-gray-400 text-xs">?</span>
+                      <span className="sr-only">{materialName}</span>
                     </div>
                   )}
 
                   {/* Selected indicator */}
                   {isSelected && (
-                    <div className="absolute inset-0 bg-amber-500/20 flex items-center justify-center">
+                    <div aria-hidden="true" className="absolute inset-0 bg-amber-500/20 flex items-center justify-center">
                       <div className="bg-amber-500 rounded-full p-1">
                         <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
@@ -238,6 +279,7 @@ const MaterialSwapPanel = ({
             return (
               <div className="flex items-center gap-3">
                 <div
+                  aria-hidden="true"
                   className="w-12 h-12 rounded-lg overflow-hidden border flex-shrink-0"
                   style={{
                     backgroundColor: selected.color_hex || '#ccc'

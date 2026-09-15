@@ -1,16 +1,19 @@
-import React from 'react';
+import React, { useId } from 'react';
 import { useLanguage } from '../../contexts/LanguageContext';
 
 const LanguageSelector = ({ className = '' }) => {
   const { currentLanguage, changeLanguage, availableLanguages, t } = useLanguage();
+  const selectId = useId();
 
   return (
     <div className={`relative ${className}`}>
+      {/* The select shows each language's own name, so the label is visually hidden */}
+      <label className="sr-only" htmlFor={selectId}>{t('language.select')}</label>
       <select
+        id={selectId}
         value={currentLanguage}
         onChange={(e) => changeLanguage(e.target.value)}
         className="language-selector-glass"
-        title={t('language.select')}
         style={{
           background: 'rgba(255, 255, 255, 0.1)',
           border: '2px solid rgba(255, 255, 255, 0.3)',
@@ -52,13 +55,14 @@ const LanguageSelector = ({ className = '' }) => {
           <option
             key={lang.code}
             value={lang.code}
+            lang={lang.code}
             style={{
               background: 'white',
               color: 'black',
               padding: '10px'
             }}
           >
-🌐 {lang.nativeName}
+            {lang.nativeName}
           </option>
         ))}
       </select>

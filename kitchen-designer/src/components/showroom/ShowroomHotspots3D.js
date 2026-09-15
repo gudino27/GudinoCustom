@@ -4,6 +4,7 @@ import React, { useRef, useState, useMemo } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { Billboard, Html } from '@react-three/drei';
 import * as THREE from 'three';
+import usePrefersReducedMotion from '../../hooks/usePrefersReducedMotion';
 
 // Convert yaw/pitch (degrees) to 3D position on sphere
 const yawPitchToPosition = (yaw, pitch, radius = 450) => {
@@ -22,7 +23,7 @@ const yawPitchToPosition = (yaw, pitch, radius = 450) => {
 };
 
 // Hotspot icon component
-const HotspotIcon = ({ type, isHovered }) => {
+const HotspotIcon = ({ type, isHovered, reduceMotion }) => {
   const getIconPath = () => {
     switch (type) {
       case 'info':
@@ -72,6 +73,8 @@ const HotspotIcon = ({ type, isHovered }) => {
         }}
       >
         <svg
+          aria-hidden="true"
+          focusable="false"
           className="w-5 h-5 text-white"
           fill="none"
           stroke="currentColor"
@@ -82,21 +85,23 @@ const HotspotIcon = ({ type, isHovered }) => {
         </svg>
       </div>
 
-      {/* Pulsing ring animation */}
-      <div
-        className="absolute inset-0 rounded-full animate-ping"
-        style={{
-          backgroundColor: colors.border,
-          opacity: 0.3,
-          animationDuration: '2s'
-        }}
-      />
+      {/* Pulsing ring animation - off when reduced motion is preferred */}
+      {!reduceMotion && (
+        <div
+          className="absolute inset-0 rounded-full animate-ping"
+          style={{
+            backgroundColor: colors.border,
+            opacity: 0.3,
+            animationDuration: '2s'
+          }}
+        />
+      )}
     </div>
   );
 };
 
 // Individual hotspot component
-const Hotspot3D = ({ hotspot, onClick, language }) => {
+const Hotspot3D = ({ hotspot, onClick, language, reduceMotion }) => {
   const [isHovered, setIsHovered] = useState(false);
   const meshRef = useRef();
 
@@ -125,7 +130,9 @@ const Hotspot3D = ({ hotspot, onClick, language }) => {
         distanceFactor={200}
         occlude={false}
       >
+        {/* Pointer-only marker: the same hotspots are listed as buttons below the view */}
         <div
+          aria-hidden="true"
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
           onClick={(e) => {
@@ -134,7 +141,7 @@ const Hotspot3D = ({ hotspot, onClick, language }) => {
           }}
           className="relative"
         >
-          <HotspotIcon type={hotspot.hotspot_type} isHovered={isHovered} />
+          <HotspotIcon type={hotspot.hotspot_type} isHovered={isHovered} reduceMotion={reduceMotion} />
 
           {/* Tooltip on hover */}
           {isHovered && title && (
@@ -158,6 +165,8 @@ const Hotspot3D = ({ hotspot, onClick, language }) => {
 
 // Main hotspots container
 const ShowroomHotspots3D = ({ hotspots = [], onHotspotClick, language }) => {
+  const reduceMotion = usePrefersReducedMotion();
+
   return (
     <group>
       {hotspots.map((hotspot) => (
@@ -166,6 +175,7 @@ const ShowroomHotspots3D = ({ hotspots = [], onHotspotClick, language }) => {
           hotspot={hotspot}
           onClick={onHotspotClick}
           language={language}
+          reduceMotion={reduceMotion}
         />
       ))}
     </group>

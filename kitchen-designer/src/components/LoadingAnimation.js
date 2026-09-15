@@ -1,6 +1,16 @@
 import React from 'react';
 
+// This renders before the app chunk (and so before LanguageProvider) loads, so
+// t() is not available. The inline script in public/index.html has already put
+// the saved language on <html lang>, so read the strings from there.
+const LOADING_TEXT = {
+  en: 'Crafting Your Experience',
+  es: 'Creando Tu Experiencia'
+};
+
 const LoadingAnimation = () => {
+  const lang = document.documentElement.lang === 'es' ? 'es' : 'en';
+
   return (
     <div style={{ 
       justifyContent: 'center', 
@@ -152,8 +162,8 @@ const LoadingAnimation = () => {
         </svg>
       </div>
 
-      {/* Cabinet Building Animation */}
-      <div style={{
+      {/* Cabinet Building Animation - decoration, not content */}
+      <div aria-hidden="true" style={{
         position: 'relative',
         width: '220px',
         height: '260px',
@@ -606,7 +616,7 @@ const LoadingAnimation = () => {
       </div>
 
       {/* Loading Text */}
-      <div style={{
+      <div role="status" style={{
         textAlign: 'center',
         animation: 'fadeIn 1s ease-out 0.5s backwards'
       }}>
@@ -619,11 +629,11 @@ const LoadingAnimation = () => {
           letterSpacing: '1px',
           textShadow: '0 2px 8px rgba(0,0,0,0.5)'
         }}>
-          Crafting Your Experience
+          {LOADING_TEXT[lang]}
         </p>
         
         {/* Animated dots */}
-        <div style={{
+        <div aria-hidden="true" style={{
           display: 'flex',
           justifyContent: 'center',
           gap: '10px',

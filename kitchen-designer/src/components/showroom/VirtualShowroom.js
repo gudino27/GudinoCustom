@@ -1,10 +1,10 @@
-import React, { useEffect, useState, useCallback, lazy, Suspense } from 'react';
+import React, { useEffect, useState, useCallback, useRef, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../contexts/LanguageContext';
-import translations from '../../utils/translations';
 import ShowroomHotspot from './ShowroomHotspot';
 import Navigation from '../ui/Navigation';
 import Footer from '../ui/Footer';
+import SEO from '../ui/SEO';
 
 // Lazy load Three.js viewer to reduce initial bundle size
 const ThreeShowroomViewer = lazy(() => import('./ThreeShowroomViewer'));
@@ -13,8 +13,7 @@ const ThreeShowroomViewer = lazy(() => import('./ThreeShowroomViewer'));
 // Uses Three.js for 360 panorama viewing with material swapping
 const VirtualShowroom = () => {
   const navigate = useNavigate();
-  const { language } = useLanguage();
-  const t = translations[language]?.showroom || translations.en.showroom;
+  const { t, currentLanguage } = useLanguage();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -22,6 +21,9 @@ const VirtualShowroom = () => {
   const [currentRoom, setCurrentRoom] = useState(null);
   const [activeHotspot, setActiveHotspot] = useState(null);
   const [showWelcome, setShowWelcome] = useState(true);
+
+  const mainRef = useRef(null);
+  const tourStartedRef = useRef(false);
 
   const API_URL = process.env.REACT_APP_API_URL || 'https://api.gudinocustom.com';
 
@@ -104,20 +106,43 @@ const VirtualShowroom = () => {
 
   // Close welcome message
   const handleStartTour = () => {
+    tourStartedRef.current = true;
     setShowWelcome(false);
   };
+
+  // The "Start Tour" button unmounts with the overlay, so keep focus in the page.
+  // The viewer grabs focus itself once it has mounted (autoFocus below).
+  useEffect(() => {
+    if (showWelcome || !tourStartedRef.current) return;
+    tourStartedRef.current = false;
+    const main = mainRef.current;
+    if (main && !main.contains(document.activeElement)) {
+      main.focus({ preventScroll: true });
+    }
+  }, [showWelcome]);
+
+  const seo = (
+    <SEO
+      title={t('showroom.pageTitle')}
+      description={t('showroom.metaDescription')}
+      keywords="virtual showroom, 360 tour, custom cabinets, cabinet materials, cabinet finishes"
+      canonical="https://gudinocustom.com/showroom"
+    />
+  );
 
   // Loading state
   if (loading) {
     return (
       <>
+        {seo}
         <Navigation />
-        <div className="min-h-screen bg-gray-900 flex items-center justify-center" >
+        <main id="main-content" tabIndex={-1} className="min-h-screen bg-gray-900 flex items-center justify-center" >
           <div className="text-center">
-            <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-amber-500 mx-auto mb-4"></div>
-            <p className="text-white text-lg">{t?.loading || 'Loading Virtual Showroom...'}</p>
+            <h1 className="sr-only">{t('showroom.pageTitle')}</h1>
+            <div aria-hidden="true" className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-amber-500 mx-auto mb-4"></div>
+            <p className="text-white text-lg">{t('showroom.loading')}</p>
           </div>
-        </div>
+        </main>
       </>
     );
   }
@@ -126,20 +151,22 @@ const VirtualShowroom = () => {
   if (error) {
     return (
       <>
+        {seo}
         <Navigation />
-        <div className="min-h-screen bg-gray-900 flex items-center justify-center" >
+        <main id="main-content" tabIndex={-1} className="min-h-screen bg-gray-900 flex items-center justify-center" >
           <div className="text-center max-w-md mx-auto px-4">
-            <div className="text-red-500 text-6xl mb-4">!</div>
-            <h2 className="text-white text-2xl mb-2">{t?.errorTitle || 'Unable to Load Showroom'}</h2>
-            <p className="text-gray-400 mb-4">{error}</p>
+            <div aria-hidden="true" className="text-red-500 text-6xl mb-4">!</div>
+            <h1 className="text-white text-2xl mb-2">{t('showroom.errorTitle')}</h1>
+            <p className="text-gray-400 mb-4">{t('showroom.errorMessage')}</p>
             <button
+              type="button"
               onClick={() => window.location.reload()}
               className="bg-amber-500 hover:bg-amber-600 text-white px-6 py-2 rounded-lg transition-colors"
             >
-              {t?.tryAgain || 'Try Again'}
+              {t('showroom.tryAgain')}
             </button>
           </div>
-        </div>
+        </main>
       </>
     );
   }
@@ -148,42 +175,48 @@ const VirtualShowroom = () => {
   if (!showroomData?.rooms?.length) {
     return (
       <>
+        {seo}
         <Navigation />
-        <div className="min-h-screen bg-gray-900 flex items-center justify-center" style={{ paddingTop: '80px' }}>
+        <main id="main-content" tabIndex={-1} className="min-h-screen bg-gray-900 flex items-center justify-center" style={{ paddingTop: '80px' }}>
           <div className="text-center max-w-md mx-auto px-4">
-            <div className="text-amber-500 text-6xl mb-6">360°</div>
-            <h2 className="text-white text-2xl mb-2">{t?.comingSoon || 'Coming Soon'}</h2>
-            <p className="text-gray-400">{t?.noRooms || 'Our virtual showroom is being set up. Please check back later.'}</p>
+            <div aria-hidden="true" className="text-amber-500 text-6xl mb-6">360°</div>
+            <h1 className="text-white text-2xl mb-2">{t('showroom.comingSoon')}</h1>
+            <p className="text-gray-400">{t('showroom.noRooms')}</p>
           </div>
-        </div>
+        </main>
       </>
     );
   }
 
-  const welcomeMessage = language === 'es'
+  const welcomeMessage = currentLanguage === 'es'
     ? showroomData?.settings?.welcome_message_es
     : showroomData?.settings?.welcome_message_en;
 
   return (
     <>
+      {seo}
       <Navigation />
-      <div className="relative w-full bg-gray-900" style={{ height: 'calc(100vh - 80px)' }}>
+      <main id="main-content" tabIndex={-1} ref={mainRef} className="relative w-full bg-gray-900" style={{ height: 'calc(100vh - 80px)' }}>
+        {/* The tour itself carries no visible page heading, so keep one for screen readers */}
+        {!showWelcome && <h1 className="sr-only">{t('showroom.pageTitle')}</h1>}
+
         {/* Welcome Overlay */}
         {showWelcome && (
           <div className="absolute inset-0 z-50 bg-black/80 flex items-center justify-center">
             <div className="max-w-lg mx-auto text-center px-6">
-              <div className="text-amber-500 text-6xl mb-6">360°</div>
+              <div aria-hidden="true" className="text-amber-500 text-6xl mb-6">360°</div>
               <h1 className="text-white text-3xl font-bold mb-4">
-                {welcomeMessage || t?.welcomeTitle || 'Welcome to Our Virtual Showroom'}
+                {welcomeMessage || t('showroom.welcomeTitle')}
               </h1>
               <p className="text-gray-300 mb-8">
-                {t?.welcomeDescriptionMaterials || 'Explore our showroom in 360°. Click and drag to look around, scroll to zoom, and click on surfaces to customize materials and finishes.'}
+                {t('showroom.welcomeDescriptionMaterials')}
               </p>
               <button
+                type="button"
                 onClick={handleStartTour}
                 className="bg-amber-500 hover:bg-amber-600 text-white px-8 py-3 rounded-lg text-lg font-semibold transition-colors"
               >
-                {t?.startTour || 'Start Tour'}
+                {t('showroom.startTour')}
               </button>
             </div>
           </div>
@@ -192,7 +225,8 @@ const VirtualShowroom = () => {
         {/* Three.js Viewer with Material Swapping */}
         <Suspense fallback={
           <div className="w-full h-full flex items-center justify-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-amber-500"></div>
+            <div aria-hidden="true" className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-amber-500"></div>
+            <span className="sr-only">{t('a11y.loading')}</span>
           </div>
         }>
           {!showWelcome && currentRoom && (
@@ -201,6 +235,7 @@ const VirtualShowroom = () => {
               currentRoom={currentRoom}
               onRoomChange={handleRoomChange}
               onHotspotClick={handleHotspotClick}
+              autoFocus
             />
           )}
         </Suspense>
@@ -209,12 +244,11 @@ const VirtualShowroom = () => {
         {activeHotspot && (
           <ShowroomHotspot
             hotspot={activeHotspot}
-            language={language}
             onClose={() => setActiveHotspot(null)}
             onNavigate={(url) => window.location.href = url}
           />
         )}
-      </div>
+      </main>
       <Footer />
     </>
   );

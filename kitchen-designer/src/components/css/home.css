@@ -60,8 +60,45 @@ body {
     left: 0;
     width: 100%;
     height: 100%;
-    background: linear-gradient(135deg, rgba(65, 65, 65, 0.8) 0%, rgba(0, 0, 0, 0.6) 100%);
+    /* 55% black keeps white hero text at 4.5:1 or better even over a pure
+       white video frame (WCAG 1.4.3) */
+    background: rgba(0, 0, 0, 0.55);
     z-index: 2;
+}
+
+/* Pause/play for the looping hero video (WCAG 2.2.2), just below the navbar */
+.home-video-toggle {
+    position: absolute;
+    top: 96px;
+    right: 20px;
+    z-index: 5;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 40px;
+    padding: 8px 16px;
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.6);
+    color: #fff;
+    font-size: 0.9rem;
+    font-weight: 600;
+    line-height: 1.2;
+    cursor: pointer;
+}
+
+.home-video-toggle:hover {
+    background: rgba(0, 0, 0, 0.8);
+}
+
+.home-video-toggle:focus-visible {
+    outline: 3px solid #fff;
+    outline-offset: 2px;
+}
+
+/* the skip link lands focus on <main>; a ring round the whole page helps no one */
+.home-main:focus {
+    outline: none;
 }
 
 .hero-content {
@@ -92,13 +129,16 @@ body {
     font-family: "Allura", cursive;
     font-size: clamp(2rem, 6vw, 4rem);
     font-weight: normal;
+    /* it was an h2; keep the heading line-height now that it is a <p> */
+    line-height: 1.2;
     margin: 10px 0 20px;
     text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.7);
 }
 
 .hero-description {
     font-size: clamp(1rem, 2.5vw, 1.5rem);
-    opacity: 0.9;
+    /* full white: at 0.9 it dropped under 4.5:1 over a bright video frame */
+    opacity: 1;
     margin-top: 20px;
     max-width: 600px;
     margin-left: auto;
@@ -125,7 +165,8 @@ body {
     left: 50%;
     transform: translateX(-50%);
     z-index: 5;
-    animation: bounce 2s infinite;
+    /* two bounces (4s), then still: nothing decorative loops (WCAG 2.2.2) */
+    animation: bounce 2s 2;
     cursor: pointer;
     padding: 15px;
     border-radius: 50%;
@@ -153,8 +194,130 @@ body {
 }
 
 /* Content Sections */
-.home-container {
+/* Kitchen Build Section */
+/* The canvas is a sticky backdrop for the whole homepage: it pins at the top
+   and the content below scrolls over it, so the kitchen keeps building all the
+   way down to the footer. Height comes from the content it wraps. */
+.kitchen-build-section {
+    background: linear-gradient(180deg, #f2f3f2 0%, #e7e9e8 55%, #dcdedd 100%);
+    position: relative;
+}
+
+.kitchen-build-sticky {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    /* dvh tracks the real viewport as mobile browser chrome collapses, so the
+       canvas does not get clipped or leave a gap on iOS/Android */
+    height: 100dvh;
+    width: 100%;
+    overflow: hidden;
+    z-index: 0;
+    /* the canvas is decorative: never let it swallow a touch-scroll gesture */
+    pointer-events: none;
+    touch-action: pan-y;
+}
+
+.kitchen-build-sticky canvas {
+    touch-action: pan-y;
+}
+
+.kitchen-build-overlay {
+    position: relative;
+    z-index: 1;
+    /* re-enable interaction for the real content sitting over the canvas */
+    pointer-events: auto;
+}
+
+/* Transparent spacers — the "stage" each run builds on. They need real scroll
+   length: a wall is a dozen separate cabinets, and at 90vh they went in faster
+   than the eye could follow. */
+.kitchen-gap {
+    height: 300vh;
+    background: transparent;
+    pointer-events: none;
+}
+
+/* The island's stage also carries the front view and the pull-back to the
+   finished room, so it is longer rather than building the island faster. */
+.kitchen-gap--finale { height: 440vh; }
+
+@media (max-width: 1024px) {
+    .kitchen-gap { height: 240vh; }
+    .kitchen-gap--finale { height: 350vh; }
+}
+
+@media (max-width: 768px) {
+    .kitchen-gap { height: 200vh; }
+    .kitchen-gap--finale { height: 300vh; }
+}
+
+/* Landscape phones are very short: keep the stage from swallowing the page */
+@media (max-height: 500px) and (orientation: landscape) {
+    .kitchen-gap { height: 260vh; }
+    .kitchen-gap--finale { height: 380vh; }
+}
+
+/* Everything between the gaps is solid, so the canvas only ever shows through
+   a gap — never through a seam between sections or around a parallax photo. */
+.home-block {
+    position: relative;
     background: rgb(110, 110, 110);
+}
+
+/* soft light vignette for depth (room is lit, so keep it subtle) */
+.kitchen-build-sticky::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at center, transparent 64%, rgba(40, 44, 48, 0.18) 100%);
+    pointer-events: none;
+    z-index: 1;
+}
+
+.kitchen-build-label {
+    position: absolute;
+    pointer-events: none;
+    bottom: 2.5rem;
+    left: 50%;
+    transform: translateX(-50%);
+    /* a dark chip rather than grey text straight on the render: over the
+       oak floor or a sunlit patch the bare text fell to ~2.7:1 (WCAG 1.4.3).
+       White on 55% black stays above 4.5:1 whatever is behind it. The extra
+       left padding balances the trailing letter-spacing. */
+    color: #fff;
+    background: rgba(0, 0, 0, 0.55);
+    padding: 0.45em 0.9em 0.45em 1.18em;
+    border-radius: 999px;
+    font-size: 0.85rem;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    pointer-events: none;
+    transition: opacity 0.4s ease;
+    font-family: inherit;
+    z-index: 2;
+}
+
+/* the longer captions (Spanish especially) run wider than a phone */
+@media (max-width: 600px) {
+    .kitchen-build-label {
+        white-space: normal;
+        /* hug the text, but wrap before the screen edge */
+        width: max-content;
+        max-width: calc(100% - 2.5rem);
+        text-align: center;
+        font-size: 0.72rem;
+        letter-spacing: 0.16em;
+        line-height: 1.5;
+        padding: 0.4em 0.9em 0.4em 1.06em;
+        border-radius: 1em;
+        bottom: 1.75rem;
+    }
+}
+
+.home-container {
+    background: transparent;
     position: relative;
     z-index: 5;
 }
@@ -203,6 +366,7 @@ body {
     position: relative;
     height: 125vh;
     overflow: hidden;
+    background: rgb(110, 110, 110);
     display:block ;
     align-items: center;
     justify-content: center;
@@ -492,6 +656,14 @@ body {
         bottom: 15px;
     }
 
+    /* the navbar is 70px (65px) tall here */
+    .home-video-toggle {
+        top: 82px;
+        right: 12px;
+        font-size: 0.85rem;
+        padding: 8px 14px;
+    }
+
     .content-section {
         padding: 60px 15px;
     }
@@ -709,10 +881,14 @@ body {
 .dropdown-content {
     max-height: 0;
     overflow: hidden;
-    transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1), transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1), transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), visibility 0s linear 0.4s;
     margin-top: 20px;
     opacity: 0;
     transform: translateY(-10px);
+    /* opacity alone left the collapsed list in the accessibility tree
+       (WCAG 2.4.3). visibility hides it for real; on close it waits out
+       the 0.4s collapse, on open it flips at once (delay reset below). */
+    visibility: hidden;
     width: 100%;
     box-sizing: border-box;
 }
@@ -721,6 +897,8 @@ body {
     max-height: 800px;
     opacity: 1;
     transform: translateY(0);
+    visibility: visible;
+    transition-delay: 0s;
 }
 
 .work-types-grid {
@@ -752,7 +930,7 @@ body {
     box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
 }
 
-.work-type-item h4 {
+.work-type-item h3 {
     color: white;
     font-size: 1.2rem;
     font-weight: 600;
@@ -815,7 +993,7 @@ body {
         border-radius: 8px;
     }
 
-    .work-type-item h4 {
+    .work-type-item h3 {
         font-size: 1.1rem;
     }
 
@@ -854,7 +1032,7 @@ body {
         border-radius: 4px;
     }
 
-    .work-type-item h4 {
+    .work-type-item h3 {
         font-size: 1rem;
         margin-bottom: 6px;
     }
@@ -951,7 +1129,7 @@ body {
         border-radius: 4px;
     }
 
-    .work-type-item h4 {
+    .work-type-item h3 {
         font-size: 0.95rem;
         margin-bottom: 5px;
     }
@@ -978,5 +1156,63 @@ body {
 
     .curved-bottom {
         height: 25px;
+    }
+}
+
+/* Reduced motion (WCAG 2.3.3; audit advisories A1/A2). KitchenBuildSection
+   pins the kitchen at the finished room, so here it scrolls by as one still
+   picture instead of a pinned backdrop, and the long transparent build stages
+   collapse. Parallax is off in Home.js; the slide-ins, bounce and hover lifts
+   are off here, so all content is visible at rest. */
+@media (prefers-reduced-motion: reduce) {
+    html {
+        scroll-behavior: auto;
+    }
+
+    .kitchen-build-sticky {
+        position: relative;
+    }
+
+    .kitchen-gap,
+    .kitchen-gap--finale {
+        height: 0;
+    }
+
+    .hero-content,
+    .hero-text,
+    .scroll-indicator,
+    .work-type-item {
+        animation: none;
+    }
+
+    .quote,
+    .quote.animate-in,
+    .feature-content,
+    .feature-content.animate-in,
+    .final-content,
+    .final-content.animate-in {
+        animation: none;
+        opacity: 1;
+        transform: none;
+    }
+
+    .quote:hover,
+    .feature-content:hover,
+    .final-content:hover,
+    .cta-button:hover,
+    .dropdown-toggle:hover,
+    .work-type-item:hover {
+        transform: none;
+    }
+
+    .scroll-indicator:hover {
+        transform: translateX(-50%);
+    }
+
+    .cta-button::before,
+    .dropdown-toggle::before,
+    .dropdown-content,
+    .dropdown-arrow {
+        transition: none;
     }
 }

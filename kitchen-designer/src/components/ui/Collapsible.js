@@ -1,8 +1,12 @@
-import React, { useState } from 'react';
+import React, { useId, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 
-const Collapsible = ({ title, children, defaultOpen = false }) => {
+// headingLevel renders the title inside a real heading so policy pages have an
+// outline (WCAG 1.3.1). Sections are h2 by default; nested ones pass 3.
+const Collapsible = ({ title, children, defaultOpen = false, headingLevel = 2 }) => {
   const [isOpen, setIsOpen] = useState(defaultOpen);
+  const contentId = `collapsible-content-${useId()}`;
+  const Heading = `h${Math.min(Math.max(headingLevel, 1), 6)}`;
 
   const toggleOpen = () => {
     setIsOpen(!isOpen);
@@ -10,23 +14,26 @@ const Collapsible = ({ title, children, defaultOpen = false }) => {
 
   return (
     <div className="collapsible">
-      <button
-        className="collapsible-header"
-        onClick={toggleOpen}
-        aria-expanded={isOpen}
-        aria-label={`${isOpen ? 'Collapse' : 'Expand'} ${title}`}
-      >
-        <span className="collapsible-title sms-section-header text-center">
-          {title}
-        </span>
-        <ChevronRight
-          className={`collapsible-caret ${isOpen ? 'open' : ''}`}
-          size={20}
-          aria-hidden="true"
-        />
-      </button>
+      <Heading className="collapsible-heading">
+        <button
+          className="collapsible-header"
+          type="button"
+          onClick={toggleOpen}
+          aria-expanded={isOpen}
+          aria-controls={isOpen ? contentId : undefined}
+        >
+          <span className="collapsible-title sms-section-header text-center">
+            {title}
+          </span>
+          <ChevronRight
+            className={`collapsible-caret ${isOpen ? 'open' : ''}`}
+            size={20}
+            aria-hidden="true"
+          />
+        </button>
+      </Heading>
       {isOpen && (
-        <div className="collapsible-content">
+        <div id={contentId} className="collapsible-content">
           {children}
         </div>
       )}

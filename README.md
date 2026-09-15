@@ -214,8 +214,7 @@ GudinoCustom/
 ├── manage-bake.sh             # Bake workflow
 ├── scripts/                   # Deployment utilities
 ├── data/geolite2/             # MaxMind GeoLite2 City database
-├── app.json / eas.json        # Retained for future Android app via Expo
-└── sitemap.xml                # SEO
+└── sitemap.xml                # Static fallback; nginx serves the backend's dynamic one
 ```
 
 ---
@@ -283,7 +282,7 @@ See `.env.example` for required environment variables.
 
 ## Future Enhancements
 
-- Android companion app via Expo (foundation retained in `app.json` / `eas.json`)
+- Android companion app (native Kotlin, planned)
 - Supplier catalog integration
 
 ---

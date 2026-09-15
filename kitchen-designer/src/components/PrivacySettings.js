@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Footer from './ui/Footer';
+import SEO from './ui/SEO';
+import { announce } from './ui/LiveRegion';
 import './css/sms-compliance.css';
 import { useLanguage } from '../contexts/LanguageContext';
 
@@ -14,27 +16,38 @@ const PrivacySettings = () => {
     setIsOptedOut(optOut === 'true');
   }, []);
 
+  const savePreference = () => {
+    setShowSuccess(true);
+    // the box below is only visual, so say it out loud too (WCAG 4.1.3)
+    announce(t('privacySettings.preferenceSaved'));
+    setTimeout(() => setShowSuccess(false), 3000);
+  };
+
   const handleOptOut = () => {
     localStorage.setItem('analytics_opt_out', 'true');
     setIsOptedOut(true);
-    setShowSuccess(true);
-    setTimeout(() => setShowSuccess(false), 3000);
+    savePreference();
   };
 
   const handleOptIn = () => {
     localStorage.removeItem('analytics_opt_out');
     setIsOptedOut(false);
-    setShowSuccess(true);
-    setTimeout(() => setShowSuccess(false), 3000);
+    savePreference();
   };
 
   return (
     <>
-      <div className="sms-compliance-container" style={{ minHeight: '100vh', paddingTop: '80px' }}>
+      <SEO
+        title={t('privacySettings.title')}
+        description={t('privacySettings.optOutDescription')}
+        keywords="privacy settings, analytics opt out, do not track, data deletion, Gudino Custom Woodworking"
+        canonical="https://gudinocustom.com/privacy-settings"
+      />
+      <main id="main-content" tabIndex={-1} className="sms-compliance-container" style={{ minHeight: '100vh', paddingTop: '80px' }}>
         <div className="sms-content">
           <h1 className="sms-header">{t('privacySettings.title')}</h1>
 
-          <div className="sms-section-header">{t('privacySettings.currentStatus')}</div>
+          <h2 className="sms-section-header">{t('privacySettings.currentStatus')}</h2>
           <div className={`sms-highlight-box ${isOptedOut ? 'opt-out-active' : 'opt-in-active'}`}>
             <strong>{t('privacySettings.analyticsTracking')}:</strong> {isOptedOut ? t('privacySettings.disabled') : t('privacySettings.enabled')}
           </div>
@@ -45,7 +58,7 @@ const PrivacySettings = () => {
             </div>
           )}
 
-          <div className="sms-section-header">{t('privacySettings.whatWeTrack')}</div>
+          <h2 className="sms-section-header">{t('privacySettings.whatWeTrack')}</h2>
           <p>{t('privacySettings.trackingIntro')}</p>
           <ul className="sms-list">
             <li>{t('privacySettings.trackingPages')}</li>
@@ -54,7 +67,7 @@ const PrivacySettings = () => {
             <li>{t('privacySettings.trackingDevice')}</li>
           </ul>
 
-          <div className="sms-section-header">{t('privacySettings.yourOptions')}</div>
+          <h2 className="sms-section-header">{t('privacySettings.yourOptions')}</h2>
 
           <div style={{ display: 'flex', gap: '20px', marginTop: '20px', flexWrap: 'wrap' }}>
             <button
@@ -79,7 +92,7 @@ const PrivacySettings = () => {
               disabled={!isOptedOut}
               style={{
                 padding: '15px 30px',
-                backgroundColor: !isOptedOut ? '#6c757d' : '#28a745',
+                backgroundColor: !isOptedOut ? '#6c757d' : '#1e7e34',
                 color: 'white',
                 border: 'none',
                 borderRadius: '5px',
@@ -92,7 +105,7 @@ const PrivacySettings = () => {
             </button>
           </div>
 
-          <div className="sms-section-header" style={{ marginTop: '40px' }}>{t('privacySettings.howOptOut')}</div>
+          <h2 className="sms-section-header" style={{ marginTop: '40px' }}>{t('privacySettings.howOptOut')}</h2>
           <p>
             {t('privacySettings.optOutDescription')}
           </p>
@@ -100,7 +113,7 @@ const PrivacySettings = () => {
             <strong>{t('privacySettings.optOutImportant')}</strong>
           </p>
 
-          <div className="sms-section-header">{t('privacySettings.dntTitle')}</div>
+          <h2 className="sms-section-header">{t('privacySettings.dntTitle')}</h2>
           <p>
             {t('privacySettings.dntDescription')}
           </p>
@@ -108,7 +121,7 @@ const PrivacySettings = () => {
             {t('privacySettings.dntStatus')} <strong>{navigator.doNotTrack === '1' ? t('privacySettings.dntEnabled') : t('privacySettings.dntNotEnabled')}</strong>
           </p>
 
-          <div className="sms-section-header">{t('privacySettings.deletionTitle')}</div>
+          <h2 className="sms-section-header">{t('privacySettings.deletionTitle')}</h2>
           <p>
             {t('privacySettings.deletionDescription')}
           </p>
@@ -118,26 +131,26 @@ const PrivacySettings = () => {
             <li><strong>{t('privacySettings.deletionResponseTime')}</strong></li>
           </ul>
 
-          <div className="sms-section-header">{t('privacySettings.dataRetentionTitle')}</div>
+          <h2 className="sms-section-header">{t('privacySettings.dataRetentionTitle')}</h2>
           <p>{t('privacySettings.dataRetentionDescription')}</p>
 
-          <div className="sms-section-header">{t('privacySettings.otherOptionsTitle')}</div>
+          <h2 className="sms-section-header">{t('privacySettings.otherOptionsTitle')}</h2>
           <p>
-            <a href="/privacy" style={{ color: '#007bff', textDecoration: 'underline' }}>
+            <a href="/privacy" style={{ color: '#bfdbfe', textDecoration: 'underline' }}>
               {t('privacySettings.viewPrivacyPolicy')}
             </a>
           </p>
           <p>
-            <a href="/contact" style={{ color: '#007bff', textDecoration: 'underline' }}>
+            <a href="/contact" style={{ color: '#bfdbfe', textDecoration: 'underline' }}>
               {t('privacySettings.contactPrivacy')}
             </a>
           </p>
 
-          <div style={{ marginTop: '40px', padding: '20px', backgroundColor: '#868788ff', borderRadius: '5px' }}>
+          <div style={{ marginTop: '40px', padding: '20px', backgroundColor: '#5f6061', borderRadius: '5px' }}>
             <strong>{t('privacySettings.note')}</strong>
           </div>
         </div>
-      </div>
+      </main>
       <Footer />
     </>
   );

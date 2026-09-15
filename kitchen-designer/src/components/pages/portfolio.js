@@ -46,6 +46,7 @@ const Portfolio = () => {
   // Modal state
   const [modalOpen, setModalOpen] = useState(false);
   const [modalSrc, setModalSrc] = useState("");
+  const [modalCaption, setModalCaption] = useState("");
   const [modalIsVideo, setModalIsVideo] = useState(false);
   const [modalVideoQualities, setModalVideoQualities] = useState(null);
 
@@ -274,6 +275,7 @@ const Portfolio = () => {
   // Modal handlers
   const openModal = (src, caption, isVideo = false, videoQualities = null) => {
     setModalSrc(src);
+    setModalCaption(caption || "");
     setModalIsVideo(isVideo);
     setModalVideoQualities(videoQualities);
     setModalOpen(true);
@@ -282,6 +284,7 @@ const Portfolio = () => {
   const closeModal = () => {
     setModalOpen(false);
     setModalSrc("");
+    setModalCaption("");
     setModalIsVideo(false);
     setModalVideoQualities(null);
   };
@@ -363,21 +366,22 @@ const Portfolio = () => {
     originalImg.src = originalImgSrc;
   }, [photos, currentIndex, radius]);
 
-  // Keyboard navigation
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (!isTransitioning) {
-        if (e.key === "ArrowLeft") rotateCarousel(-1);
-        if (e.key === "ArrowRight") rotateCarousel(1);
-        if (e.key === "ArrowUp") changePage(currentPage - 1);
-        if (e.key === "ArrowDown") changePage(currentPage + 1);
-        if (e.key === "Home" && e.ctrlKey) resetToBeginning();
-        if (e.key === "Escape") closeModal();
-      }
-    };
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [rotateCarousel, changePage, currentPage, resetToBeginning, isTransitioning]);
+  // Keyboard navigation for the 3D gallery. Scoped to the gallery wrapper instead
+  // of the whole document, so arrow keys no longer fire in grid view or inside
+  // form controls; the viewer handles Escape itself (native <dialog>).
+  const handleGalleryKeyDown = (e) => {
+    if (isTransitioning) return;
+    if (e.target.closest && e.target.closest("input, select, textarea")) return;
+
+    if (e.key === "ArrowLeft") rotateCarousel(-1);
+    else if (e.key === "ArrowRight") rotateCarousel(1);
+    else if (e.key === "ArrowUp") changePage(currentPage - 1);
+    else if (e.key === "ArrowDown") changePage(currentPage + 1);
+    else if (e.key === "Home" && e.ctrlKey) resetToBeginning();
+    else return;
+
+    e.preventDefault();
+  };
 
   // Update carousel container orientation
   useEffect(() => {
@@ -510,101 +514,107 @@ const Portfolio = () => {
   return (
     <>
       <SEO
-        title="Portfolio - Kitchen & Bathroom Remodeling Projects"
+        title={t("seo.portfolio.title")}
         description="Browse our extensive portfolio of custom kitchen cabinets, bathroom vanities, and woodworking projects in Washington. Quality craftsmanship showcased."
         keywords="kitchen portfolio, bathroom remodeling gallery, custom cabinet photos, woodworking projects, before and after, Washington remodeling"
         canonical="https://gudinocustom.com/portfolio"
       />
       <Navigation />
 
-      {/* Category Selection */}
-      <CategorySelector
-        categories={categories}
-        currentCategory={currentCategory}
-        selectCategory={selectCategory}
-        getCategoryName={getCategoryName}
-        viewMode={viewMode}
-        setViewMode={setViewMode}
-        beforeAfterPairs={beforeAfterPairs}
-        t={t}
-      />
-
-      {/* Page Navigation (only for 3D view) */}
-      {viewMode === "3d" && (
-        <PageNavigation
-          totalPages={totalPages}
-          currentPage={currentPage}
-          changePage={changePage}
-          resetToBeginning={resetToBeginning}
-          savedPositions={savedPositions}
+      <main id="main-content" tabIndex={-1}>
+        {/* Category Selection */}
+        <CategorySelector
+          categories={categories}
           currentCategory={currentCategory}
-          allCategoryPhotos={allCategoryPhotos}
-          isTransitioning={isTransitioning}
-          PHOTOS_PER_PAGE={PHOTOS_PER_PAGE}
+          selectCategory={selectCategory}
+          getCategoryName={getCategoryName}
+          viewMode={viewMode}
+          setViewMode={setViewMode}
+          beforeAfterPairs={beforeAfterPairs}
+          t={t}
         />
-      )}
 
-     
-      {/*
-      3D Carousel View
-      {viewMode === "3d" && (
-        <Carousel3D
-          photos={photos}
-          currentIndex={currentIndex}
-          rotationAngle={rotationAngle}
-          isTransitioning={isTransitioning}
-          goToSlide={goToSlide}
-          openModal={openModal}
-          handleImageLoad={handleImageLoad}
-          radius={radius}
-        />
-      )}
-      */}
+        {/* 3D view: page navigation and carousel share one keyboard scope */}
+        {viewMode === "3d" && (
+          <div onKeyDown={handleGalleryKeyDown}>
+            <PageNavigation
+              totalPages={totalPages}
+              currentPage={currentPage}
+              changePage={changePage}
+              resetToBeginning={resetToBeginning}
+              savedPositions={savedPositions}
+              currentCategory={currentCategory}
+              allCategoryPhotos={allCategoryPhotos}
+              isTransitioning={isTransitioning}
+              PHOTOS_PER_PAGE={PHOTOS_PER_PAGE}
+            />
 
+            {/*
+            3D Carousel View
+            <Carousel3D
+              photos={photos}
+              currentIndex={currentIndex}
+              rotationAngle={rotationAngle}
+              isTransitioning={isTransitioning}
+              goToSlide={goToSlide}
+              openModal={openModal}
+              handleImageLoad={handleImageLoad}
+              radius={radius}
+            />
+            */}
+          </div>
+        )}
 
-      {/* Before/After Carousel View */}
-      {viewMode === "beforeAfter" && beforeAfterPairs.length > 0 && (
-        <div
-          className="before-after-section"
-          style={{
-            maxWidth: "1200px",
-            margin: "3rem auto",
-            padding: "0 1rem",
-          }}
-        >
-          <BeforeAfterCarousel
-            photoPairs={beforeAfterPairs}
-            autoPlayInterval={5000}
+        {/* Before/After Carousel View */}
+        {viewMode === "beforeAfter" && beforeAfterPairs.length > 0 && (
+          <div
+            className="before-after-section"
+            style={{
+              maxWidth: "1200px",
+              margin: "3rem auto",
+              padding: "0 1rem",
+            }}
+          >
+            <BeforeAfterCarousel
+              photoPairs={beforeAfterPairs}
+              autoPlayInterval={5000}
+            />
+          </div>
+        )}
+
+        {/* Grid View */}
+        {viewMode === "grid" && (
+          <GridView
+            photos={allCategoryPhotos}
+            openModal={openModal}
+            categoryName={currentCategory ? getCategoryName(currentCategory) : ""}
           />
-        </div>
-      )}
+        )}
 
-      {/* Grid View */}
-      {viewMode === "grid" && (
-        <GridView photos={allCategoryPhotos} openModal={openModal} />
-      )}
+        {/* Video Hero Section */}
+        {categoryVideos.length > 0 && currentCategory && (
+          <VideoHeroSection
+            categoryVideos={categoryVideos}
+            currentVideoIndex={currentVideoIndex}
+            setCurrentVideoIndex={setCurrentVideoIndex}
+            openModal={openModal}
+            categoryName={getCategoryName(currentCategory)}
+          />
+        )}
 
-      {/* Video Hero Section */}
-      {categoryVideos.length > 0 && currentCategory && (
-        <VideoHeroSection
-          categoryVideos={categoryVideos}
-          currentVideoIndex={currentVideoIndex}
-          setCurrentVideoIndex={setCurrentVideoIndex}
-          openModal={openModal}
+        {/* Photo/Video Modal */}
+        <PhotoModal
+          isOpen={modalOpen}
+          onClose={closeModal}
+          src={modalSrc}
+          caption={modalCaption}
+          isVideo={modalIsVideo}
+          videoQualities={modalVideoQualities}
         />
-      )}
 
-      {/* Photo/Video Modal */}
-      <PhotoModal
-        isOpen={modalOpen}
-        onClose={closeModal}
-        src={modalSrc}
-        isVideo={modalIsVideo}
-        videoQualities={modalVideoQualities}
-      />
-
-      {/* Instagram Feed Section */}
-      <InstagramFeed limit={6} showTitle={true} />
+        {/* Instagram Feed Section */}
+        <InstagramFeed limit={6} showTitle={true} />
+      </main>
 
       <Footer />
     </>

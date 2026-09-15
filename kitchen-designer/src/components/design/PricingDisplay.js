@@ -1,4 +1,5 @@
 import React from 'react';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 const PricingDisplay = ({
   isVisible,
@@ -10,6 +11,8 @@ const PricingDisplay = ({
   wallPricing,
   originalWalls
 }) => {
+  const { t } = useLanguage();
+
   if (!isVisible) return null;
 
   const hasCabinets = currentRoomData.elements.some(
@@ -39,21 +42,22 @@ const PricingDisplay = ({
 
   return (
     <div className="mb-6 p-4 bg-blue-50 rounded-lg">
-      <h3 className="font-semibold mb-3">Pricing Summary - {activeRoom === 'kitchen' ? 'Kitchen' : 'Bathroom'}</h3>
+      <h2 className="font-semibold mb-3">{t('designer.pricingSummary', { room: activeRoom === 'kitchen' ? t('designer.kitchen') : t('designer.bathroom') })}</h2>
       <div className="space-y-2 text-sm">
         {!hasCabinets && (
-          <p className="text-xs text-gray-600">No cabinets placed yet — add cabinets to see pricing.</p>
+          <p className="text-xs text-gray-700">{t('designer.noCabinetsYet')}</p>
         )}
         {/* Base cabinet pricing */}
         <div className="flex justify-between">
-          <span>Base Cabinet Price:</span>
+          <span>{t('designer.baseCabinetPrice')}:</span>
           <span>${baseCabinetPrice.toFixed(2)}</span>
         </div>
 
         {/* Color options selector */}
         <div className="flex justify-between">
-          <span>Color Options:</span>
+          <label htmlFor="kd-color-options">{t('designer.colorOptions')}:</label>
           <select
+            id="kd-color-options"
             value={currentRoomData.colorCount}
             onChange={(e) => setCurrentRoomData({
               ...currentRoomData,
@@ -62,30 +66,30 @@ const PricingDisplay = ({
             className="px-2 py-1 border rounded text-xs bg-white"
             disabled={!hasCabinets}
           >
-            <option value={1}>Single Color (Included)</option>
-            <option value={2}>Two Colors (+$100)</option>
-            <option value={3}>Three Colors (+$200)</option>
-            <option value="custom">Custom Colors (+$500)</option>
+            <option value={1}>{t('designer.colors.single')}</option>
+            <option value={2}>{t('designer.colors.two')}</option>
+            <option value={3}>{t('designer.colors.three')}</option>
+            <option value="custom">{t('designer.colors.custom')}</option>
           </select>
         </div>
 
         {/* Wall modification pricing */}
         {totalWallCost > 0 && (
           <div className="flex justify-between">
-            <span>Wall Modifications:</span>
+            <span>{t('pricing.walls')}:</span>
             <span>${totalWallCost.toFixed(2)}</span>
           </div>
         )}
 
         {/* Total price display */}
         <div className="border-t pt-2 font-semibold flex justify-between">
-          <span>Total Estimate:</span>
+          <span>{t('designer.totalEstimate')}:</span>
           <span>${totalEstimate.toFixed(2)}</span>
         </div>
 
         {/* Pricing disclaimer */}
-        <p className="text-xs text-gray-600 mt-2">
-          * This is an estimate. Final pricing may vary based on specific requirements.
+        <p className="text-xs text-gray-700 mt-2">
+          {t('designer.estimateDisclaimer')}
         </p>
       </div>
     </div>

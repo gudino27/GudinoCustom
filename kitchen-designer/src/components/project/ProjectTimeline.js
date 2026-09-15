@@ -19,7 +19,8 @@ const API_BASE = process.env.REACT_APP_API_URL || 'https://api.gudinocustom.com'
 
 const ProjectTimeline = () => {
   const { token } = useParams();
-  const { t, changeLanguage } = useLanguage();
+  const { t, currentLanguage, changeLanguage } = useLanguage();
+  const locale = currentLanguage === 'es' ? 'es-US' : 'en-US';
   const [timeline, setTimeline] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -48,11 +49,12 @@ const ProjectTimeline = () => {
         const data = await response.json();
         setTimeline(data);
       } else {
-        setError('Timeline not found or access denied');
+        // Errors are kept as translation keys so they follow the language switch
+        setError('timeline.errorNotFound');
       }
     } catch (err) {
       console.error('Error loading timeline:', err);
-      setError('Failed to load timeline');
+      setError('timeline.errorLoad');
     } finally {
       setLoading(false);
     }
@@ -73,19 +75,19 @@ const ProjectTimeline = () => {
     const styles = {
       pending: {
         icon: Circle,
-        color: '#6B7280',
+        color: '#4B5563',
         bg: '#F3F4F6',
         iconBg: '#9CA3AF'
       },
       in_progress: {
         icon: PlayCircle,
-        color: '#2563EB',
+        color: '#1D4ED8',
         bg: '#DBEAFE',
         iconBg: '#3B82F6'
       },
       completed: {
         icon: CheckCircle,
-        color: '#059669',
+        color: '#065F46',
         bg: '#D1FAE5',
         iconBg: '#10B981'
       }
@@ -106,10 +108,10 @@ const ProjectTimeline = () => {
     const Icon = style.icon;
 
     return (
-      <div style={{ position: 'relative', paddingLeft: '3rem' }}>
+      <li style={{ position: 'relative', paddingLeft: '3rem', listStyle: 'none' }}>
         {/* Timeline connector */}
         {!isLast && (
-          <div style={{
+          <div aria-hidden="true" style={{
             position: 'absolute',
             left: '1.25rem',
             top: '3rem',
@@ -120,7 +122,7 @@ const ProjectTimeline = () => {
         )}
 
         {/* Phase icon */}
-        <div style={{
+        <div aria-hidden="true" style={{
           position: 'absolute',
           left: '0',
           top: '0.5rem',
@@ -148,9 +150,9 @@ const ProjectTimeline = () => {
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
             <div>
-              <h3 style={{ fontSize: '1.25rem', fontWeight: '600', marginBottom: '0.5rem' }}>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: '600', marginBottom: '0.5rem' }}>
                 {getPhaseLabel(phase.phase_name_key)}
-              </h3>
+              </h2>
               <span style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -173,21 +175,21 @@ const ProjectTimeline = () => {
               {phase.start_date && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.875rem', color: '#6B7280' }}>
                   <Calendar size={16} />
-                  <span><strong>{t('timeline.started')}:</strong> {new Date(phase.start_date).toLocaleDateString()}</span>
+                  <span><strong>{t('timeline.started')}:</strong> {new Date(phase.start_date).toLocaleDateString(locale)}</span>
                 </div>
               )}
 
               {phase.estimated_completion && phase.status !== 'completed' && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.875rem', color: '#6B7280' }}>
                   <Clock size={16} />
-                  <span><strong>{t('timeline.estimated')}:</strong> {new Date(phase.estimated_completion).toLocaleDateString()}</span>
+                  <span><strong>{t('timeline.estimated')}:</strong> {new Date(phase.estimated_completion).toLocaleDateString(locale)}</span>
                 </div>
               )}
 
               {phase.actual_completion && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.875rem', color: '#059669' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.875rem', color: '#047857' }}>
                   <CheckCircle size={16} />
-                  <span><strong>{t('timeline.completed')}:</strong> {new Date(phase.actual_completion).toLocaleDateString()}</span>
+                  <span><strong>{t('timeline.completed')}:</strong> {new Date(phase.actual_completion).toLocaleDateString(locale)}</span>
                 </div>
               )}
             </div>
@@ -220,38 +222,46 @@ const ProjectTimeline = () => {
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '0.75rem' }}>
                 {phase.photos.map((photo, idx) => (
-                  <img
+                  <a
                     key={idx}
-                    src={`${API_BASE}${photo}`}
-                    alt={`${getPhaseLabel(phase.phase_name_key)} photo ${idx + 1}`}
-                    style={{
-                      width: '100%',
-                      height: '150px',
-                      objectFit: 'cover',
-                      borderRadius: '8px',
-                      cursor: 'pointer'
-                    }}
-                    onClick={() => window.open(`${API_BASE}${photo}`, '_blank')}
-                  />
+                    href={`${API_BASE}${photo}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ display: 'block', borderRadius: '8px' }}
+                  >
+                    <img
+                      src={`${API_BASE}${photo}`}
+                      alt={t('timeline.photoAlt', { phase: getPhaseLabel(phase.phase_name_key), n: idx + 1 })}
+                      style={{
+                        width: '100%',
+                        height: '150px',
+                        objectFit: 'cover',
+                        borderRadius: '8px'
+                      }}
+                    />
+                    <span className="sr-only">{t('a11y.opensInNewTab')}</span>
+                  </a>
                 ))}
               </div>
             </div>
           )}
         </div>
-      </div>
+      </li>
     );
   };
 
   if (loading) {
     return (
       <>
+        <SEO title={t('timeline.title')} description={t('timeline.description')} />
         <Navigation />
-        <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F9FAFB' }}>
-          <div style={{ textAlign: 'center' }}>
-            <RefreshCw size={48} className="animate-spin" style={{ margin: '0 auto', color: '#6B7280' }} />
+        <main id="main-content" tabIndex={-1} style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F9FAFB' }}>
+          <div style={{ textAlign: 'center' }} role="status">
+            <h1 className="sr-only">{t('timeline.title')}</h1>
+            <RefreshCw size={48} className="animate-spin" style={{ margin: '0 auto', color: '#6B7280' }} aria-hidden="true" />
             <p style={{ marginTop: '1rem', color: '#6B7280' }}>{t('timeline.loading')}</p>
           </div>
-        </div>
+        </main>
       </>
     );
   }
@@ -259,10 +269,11 @@ const ProjectTimeline = () => {
   if (error) {
     return (
       <>
+        <SEO title={t('timeline.error')} description={t('timeline.description')} />
         <Navigation />
-        <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F9FAFB' }}>
+        <main id="main-content" tabIndex={-1} style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F9FAFB' }}>
           <div style={{ textAlign: 'center', maxWidth: '500px', padding: '2rem' }}>
-            <div style={{
+            <div aria-hidden="true" style={{
               width: '80px',
               height: '80px',
               borderRadius: '50%',
@@ -275,9 +286,9 @@ const ProjectTimeline = () => {
               <FileText size={40} color="#DC2626" />
             </div>
             <h1 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>{t('timeline.error')}</h1>
-            <p style={{ color: '#6B7280' }}>{error}</p>
+            <p style={{ color: '#4B5563' }}>{t(error)}</p>
           </div>
-        </div>
+        </main>
       </>
     );
   }
@@ -292,7 +303,7 @@ const ProjectTimeline = () => {
       />
       <Navigation />
 
-      <div style={{ minHeight: '100vh', background: '#F9FAFB', padding: '3rem 1rem' }}>
+      <main id="main-content" tabIndex={-1} style={{ minHeight: '100vh', background: '#F9FAFB', padding: '3rem 1rem' }}>
         <div style={{ maxWidth: '900px', margin: '0 auto' }}>
           {/* Header */}
           <div style={{
@@ -331,8 +342,8 @@ const ProjectTimeline = () => {
             </div>
           </div>
 
-          {/* Timeline phases */}
-          <div>
+          {/* Timeline phases: an ordered list, because the phases run in sequence */}
+          <ol style={{ listStyle: 'none', margin: 0, padding: 0 }} aria-label={t('timeline.phasesLabel')}>
             {timeline.phases && timeline.phases.map((phase, index) => (
               <PhaseCard
                 key={phase.id}
@@ -341,7 +352,7 @@ const ProjectTimeline = () => {
                 isLast={index === timeline.phases.length - 1}
               />
             ))}
-          </div>
+          </ol>
 
           {/* Footer note */}
           <div style={{
@@ -356,7 +367,7 @@ const ProjectTimeline = () => {
             </p>
           </div>
         </div>
-      </div>
+      </main>
       <Footer />
     </>
   );

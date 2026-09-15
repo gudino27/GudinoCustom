@@ -1,18 +1,42 @@
-import { useState, useEffect } from "react";
+import { useRef, useState, useEffect } from "react";
 import "./css/sms-compliance.css";
 import WebsitePrivacy from "./WebsitePrivacy";
 import Navigation from "./ui/Navigation";
 import Footer from "./ui/Footer";
+import SEO from "./ui/SEO";
 import Collapsible from "./ui/Collapsible";
 import { useLanguage } from "../contexts/LanguageContext";
 
 const SmsCompliance = ({ defaultTab = "consent" }) => {
-  const { t } = useLanguage();
+  const { t, currentLanguage } = useLanguage();
   const [activeTab, setActiveTab] = useState(defaultTab);
+  const tabRefs = useRef({});
 
   useEffect(() => {
     setActiveTab(defaultTab);
   }, [defaultTab]);
+
+  const tabs = [
+    { id: "website", label: t("sms.tabs.website"), title: t("websitePrivacy.header"), description: t("websitePrivacy.commitment.content"), path: "/privacy" },
+    { id: "consent", label: t("sms.tabs.consent"), title: t("smsCompliance.consent.header"), description: t("smsCompliance.consent.policy.content"), path: "/sms-consent-verification" },
+    { id: "terms", label: t("sms.tabs.terms"), title: t("smsCompliance.terms.header"), description: t("smsCompliance.terms.frequency.intro"), path: "/sms-terms" },
+    { id: "privacy", label: t("sms.tabs.privacy"), title: t("smsCompliance.privacy.header"), description: t("smsCompliance.privacy.sharing.never"), path: "/sms-privacy" },
+  ];
+
+  const currentTab = tabs.find((tab) => tab.id === activeTab) || tabs[0];
+
+  // Tab pattern: arrow keys move between tabs, Home/End jump to the ends
+  const handleTabKeyDown = (event, index) => {
+    let next = null;
+    if (event.key === "ArrowRight" || event.key === "ArrowDown") next = (index + 1) % tabs.length;
+    else if (event.key === "ArrowLeft" || event.key === "ArrowUp") next = (index - 1 + tabs.length) % tabs.length;
+    else if (event.key === "Home") next = 0;
+    else if (event.key === "End") next = tabs.length - 1;
+    if (next === null) return;
+    event.preventDefault();
+    setActiveTab(tabs[next].id);
+    tabRefs.current[tabs[next].id]?.focus();
+  };
 
   const ConsentContent = () => (
     <>
@@ -38,7 +62,7 @@ const SmsCompliance = ({ defaultTab = "consent" }) => {
           {t("smsCompliance.consent.script.content")}
         </div>
 
-        <div className="sms-section-header">{t("smsCompliance.consent.document.title")}</div>
+        <h3 className="sms-section-header">{t("smsCompliance.consent.document.title")}</h3>
         <ul className="sms-list">
           <li>{t("smsCompliance.consent.document.date")}</li>
           <li>{t("smsCompliance.consent.document.customer")}</li>
@@ -58,19 +82,19 @@ const SmsCompliance = ({ defaultTab = "consent" }) => {
       </Collapsible>
 
       <Collapsible title={t("smsCompliance.consent.samples.title")}>
-        <Collapsible title={t("smsCompliance.consent.samples.ready.title")}>
+        <Collapsible title={t("smsCompliance.consent.samples.ready.title")} headingLevel={3}>
           <div className="sms-sample-message">
             {t("smsCompliance.consent.samples.ready.content")}
           </div>
         </Collapsible>
 
-        <Collapsible title={t("smsCompliance.consent.samples.modified.title")}>
+        <Collapsible title={t("smsCompliance.consent.samples.modified.title")} headingLevel={3}>
           <div className="sms-sample-message">
             {t("smsCompliance.consent.samples.modified.content")}
           </div>
         </Collapsible>
 
-        <Collapsible title={t("smsCompliance.consent.samples.reminder.title")}>
+        <Collapsible title={t("smsCompliance.consent.samples.reminder.title")} headingLevel={3}>
           <div className="sms-sample-message">
             {t("smsCompliance.consent.samples.reminder.content")}
           </div>
@@ -231,7 +255,7 @@ const SmsCompliance = ({ defaultTab = "consent" }) => {
         </p>
 
         <p>
-          <em>{t("smsCompliance.privacy.contact.updated")} {new Date().toLocaleDateString()}</em>
+          <em>{t("smsCompliance.privacy.contact.updated")} {new Date().toLocaleDateString(currentLanguage === "es" ? "es-US" : "en-US")}</em>
         </p>
       </Collapsible>
     </>
@@ -254,46 +278,45 @@ const SmsCompliance = ({ defaultTab = "consent" }) => {
 
   return (
     <div>
+      <SEO
+        title={currentTab.title}
+        description={currentTab.description}
+        keywords="SMS consent, SMS terms, SMS privacy, website privacy policy, Gudino Custom Woodworking"
+        canonical={`https://gudinocustom.com${currentTab.path}`}
+      />
       <Navigation />
       <div style={{ height: "3vh" }}></div>
-      <div className="sms-compliance-container">
-        <div className="sms-tabs-container">
-          <button
-            className={`sms-tab-button ${
-              activeTab === "website" ? "active" : ""
-            }`}
-            onClick={() => setActiveTab("website")}
-          >
-            Website Privacy
-          </button>
-          <button
-            className={`sms-tab-button ${
-              activeTab === "consent" ? "active" : ""
-            }`}
-            onClick={() => setActiveTab("consent")}
-          >
-            SMS Consent
-          </button>
-          <button
-            className={`sms-tab-button ${
-              activeTab === "terms" ? "active" : ""
-            }`}
-            onClick={() => setActiveTab("terms")}
-          >
-            SMS Terms
-          </button>
-          <button
-            className={`sms-tab-button ${
-              activeTab === "privacy" ? "active" : ""
-            }`}
-            onClick={() => setActiveTab("privacy")}
-          >
-            SMS Privacy
-          </button>
+      <main id="main-content" tabIndex={-1} className="sms-compliance-container">
+        <div className="sms-tabs-container" role="tablist" aria-label={t("sms.tabs.label")}>
+          {tabs.map((tab, index) => (
+            <button
+              key={tab.id}
+              id={`sms-tab-${tab.id}`}
+              type="button"
+              role="tab"
+              ref={(el) => { tabRefs.current[tab.id] = el; }}
+              aria-selected={activeTab === tab.id}
+              aria-controls="sms-tabpanel"
+              tabIndex={activeTab === tab.id ? 0 : -1}
+              className={`sms-tab-button ${activeTab === tab.id ? "active" : ""}`}
+              onClick={() => setActiveTab(tab.id)}
+              onKeyDown={(event) => handleTabKeyDown(event, index)}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
 
-        <div className="sms-content">{renderContent()}</div>
-      </div>
+        <div
+          className="sms-content"
+          id="sms-tabpanel"
+          role="tabpanel"
+          tabIndex={0}
+          aria-labelledby={`sms-tab-${currentTab.id}`}
+        >
+          {renderContent()}
+        </div>
+      </main>
       <div style={{ height: "2vh" }}></div>
       <Footer />
     </div>

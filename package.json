@@ -1,6 +1,0 @@
-{
-  "dependencies": {
-    "babel-preset-expo": "^54.0.4",
-    "react-native-svg": "^15.14.0"
-  }
-}

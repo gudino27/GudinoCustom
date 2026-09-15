@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Instagram, AlertCircle } from 'lucide-react';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'https://api.gudinocustom.com';
 
@@ -19,6 +20,7 @@ const API_BASE = process.env.REACT_APP_API_URL || 'https://api.gudinocustom.com'
  * tracking prevention issues and Invariant Violation errors
  */
 const InstagramFeed = ({ limit = 6, showTitle = true, className = '' }) => {
+  const { t } = useLanguage();
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(false); // Start false - only load when visible
   const [error, setError] = useState('');
@@ -130,11 +132,11 @@ const InstagramFeed = ({ limit = 6, showTitle = true, className = '' }) => {
           justifyContent: 'center',
           alignItems: 'center',
           minHeight: '300px',
-          color: '#9CA3AF'
+          color: '#f3f4f6'
         }}>
           <div style={{ textAlign: 'center' }}>
             <Instagram size={48} style={{ opacity: 0.3 }} />
-            <p style={{ marginTop: '1rem', fontSize: '0.875rem' }}>Instagram Feed</p>
+            <p style={{ marginTop: '1rem', fontSize: '0.875rem' }}>{t('instagram.feed')}</p>
           </div>
         </div>
       )}
@@ -168,7 +170,7 @@ const InstagramFeed = ({ limit = 6, showTitle = true, className = '' }) => {
               }}
             />
             <p style={{ marginTop: '1.5rem', color: '#6B7280', fontSize: '1.125rem' }}>
-              Loading Instagram feed...
+              {t('instagram.loading')}
             </p>
             <style>{`
               @keyframes spin {
@@ -260,7 +262,7 @@ const InstagramFeed = ({ limit = 6, showTitle = true, className = '' }) => {
                         ) : (
                           <img
                             src={post.media_url}
-                            alt={post.caption || 'Instagram post'}
+                            alt={post.caption || t('instagram.postN', { n: index + 1 })}
                             style={{
                               height: '100%',
                               width: '100%',
@@ -312,8 +314,9 @@ const InstagramFeed = ({ limit = 6, showTitle = true, className = '' }) => {
                             gap: '0.5rem'
                           }}
                         >
-                          <span>View on Instagram</span>
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <span>{t('instagram.viewOnInstagram')}</span>
+                          <span className="sr-only">{t('a11y.opensInNewTab')}</span>
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true" focusable="false">
                             <path d="M7 17L17 7M17 7H7M17 7V17"/>
                           </svg>
                         </div>
@@ -349,7 +352,7 @@ const InstagramFeed = ({ limit = 6, showTitle = true, className = '' }) => {
                       maxWidth: '100%'
                     }}>
                       <iframe
-                        src={`${post.permalink}embed/?autoplay=1&mute=1`}
+                        src={`${post.permalink}embed/`}
                         style={{
                           width: '100%',
                           height: '50vh',
@@ -358,9 +361,9 @@ const InstagramFeed = ({ limit = 6, showTitle = true, className = '' }) => {
                         }}
                         scrolling="no"
                         allowtransparency="true"
-                        allow="autoplay; encrypted-media; fullscreen"
+                        allow="encrypted-media; fullscreen"
                         allowFullScreen
-                        title={`Instagram post ${post.id}`}
+                        title={t('instagram.postN', { n: index + 1 })}
                       />
                     </div>
                   )}
@@ -402,7 +405,8 @@ const InstagramFeed = ({ limit = 6, showTitle = true, className = '' }) => {
                   e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.05)';
                 }}
               >
-                View More on Instagram
+                {t('instagram.viewMore')}
+                <span className="sr-only">{t('a11y.opensInNewTab')}</span>
                 <Instagram size={20} />
               </a>
             </div>

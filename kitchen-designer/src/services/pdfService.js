@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf';
 import { elementTypes } from '../constants/elementTypes';
+import { announce } from '../components/ui/LiveRegion';
 
 //  constants 
 const COMPANY_NAME = process.env.REACT_APP_COMPANY_NAME || 'Gudino Custom WoodWorking LLC';
@@ -338,6 +339,7 @@ const capture3DViews = async (setViewMode, currentRoomData, cameraRef) => {
 };
 
 export const sendQuote = async ({
+  t = (key, fallback) => (typeof fallback === 'string' ? fallback : key),
   clientInfo,
   kitchenData,
   bathroomData,
@@ -350,28 +352,30 @@ export const sendQuote = async ({
   setSelectedWall,
   cameraRef  // New: ref to 3D camera controller
 }) => {
-  // Validate required client information
-  if (!clientInfo.name || !clientInfo.email || !clientInfo.phone) {
-    if (!clientInfo.name) {
-      alert('please fill in your name');
-      return;
-    }
-    else if (!clientInfo.email) {
-      alert('please fill in your email');
-      return;
-    }
-    else if (!clientInfo.phone) {
-      alert('please fill in your phone number');
-      return;
-    }
+  // Validate required client information. Errors are returned (and announced)
+  // instead of shown in an alert() so they reach assistive tech (WCAG 3.3.1).
+  const errors = {};
+  if (!clientInfo.name) errors.name = t('forms.error.nameRequired');
+  if (!clientInfo.email) errors.email = t('forms.error.emailRequired');
+  else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clientInfo.email)) errors.email = t('forms.error.emailInvalid');
+  if (!clientInfo.phone) errors.phone = t('forms.error.phoneRequired');
+
+  if (Object.keys(errors).length > 0) {
+    const message = Object.values(errors).join(' ');
+    announce(message);
+    return { success: false, errors, message };
   }
+
+  let loadingMessage = null;
 
   try {
     // Show loading state
-    const loadingMessage = document.createElement('div');
-    loadingMessage.innerHTML = 'Capturing your design...';
+    loadingMessage = document.createElement('div');
+    loadingMessage.setAttribute('role', 'status');
+    loadingMessage.textContent = t('designer.capturing');
     loadingMessage.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); z-index: 1000;';
     document.body.appendChild(loadingMessage);
+    announce(t('designer.capturing'));
 
     // Helper function to capture SVG and convert to canvas for PDF
     const captureSVG = async (svgElement) => {
@@ -470,7 +474,8 @@ export const sendQuote = async ({
     // Return to floor view
     setViewMode('floor');
 
-    loadingMessage.innerHTML = 'Generating PDF...';
+    loadingMessage.textContent = t('designer.generatingPdf');
+    announce(t('designer.generatingPdf'));
 
     // Generate PDF with professional styling
     const pdf = new jsPDF('p', 'mm', 'a4');
@@ -650,7 +655,8 @@ export const sendQuote = async ({
     // Get PDF blob
     const pdfBlob = pdf.output('blob');
 
-    loadingMessage.innerHTML = 'Sending design...';
+    loadingMessage.textContent = t('designer.sending');
+    announce(t('designer.sending'));
 
     // Create form data
     const formData = new FormData();
@@ -689,9 +695,10 @@ export const sendQuote = async ({
     document.body.removeChild(loadingMessage);
 
     if (response.ok) {
-      const result = await response.json();
+      await response.json();
 
-      alert(`Thank you! Your design has been sent to ${COMPANY_NAME}.`);
+      const sentMessage = t('designer.sent', { company: COMPANY_NAME });
+      announce(sentMessage);
 
       // Reset client info (return the reset object)
       const resetClientInfo = {
@@ -704,19 +711,24 @@ export const sendQuote = async ({
         comments: ''
       };
 
-      // Offer download
-      if (window.confirm('Would you like to download a copy?')) {
+      // Confirm success and offer the download in one accessible dialog
+      if (window.confirm(`${sentMessage} ${t('designer.downloadCopy')}`)) {
         pdf.save(`cabinet-design-${clientInfo.name.replace(/\s+/g, '-')}.pdf`);
       }
 
-      return { success: true, resetClientInfo };
+      return { success: true, resetClientInfo, message: sentMessage };
     } else {
       throw new Error('Failed to send design');
     }
 
   } catch (error) {
     console.error('Error:', error);
-    alert('Error sending your design. Please try again.');
-    return { success: false };
+    // Make sure the progress overlay never stays behind on failure
+    if (loadingMessage && loadingMessage.parentNode) {
+      loadingMessage.parentNode.removeChild(loadingMessage);
+    }
+    const message = t('designer.sendFailed');
+    announce(message);
+    return { success: false, message };
   }
 };

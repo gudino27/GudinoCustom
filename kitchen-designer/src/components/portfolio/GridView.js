@@ -1,10 +1,14 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useLanguage } from '../../contexts/LanguageContext';
+import { announce } from '../ui/LiveRegion';
+import { getMediaTitle } from './mediaTitle';
 
 const API_BASE = process.env.REACT_APP_API_URL || "https://api.gudinocustom.com";
 
 // GridView Component
 // Grid layout for displaying portfolio photos with pagination
-const GridView = ({ photos, openModal, itemsPerPage = 10 }) => {
+const GridView = ({ photos, openModal, categoryName = '', itemsPerPage = 10 }) => {
+  const { t } = useLanguage();
   const [currentPage, setCurrentPage] = useState(1);
   // Calculate total pages
   const totalPages = useMemo(() => Math.ceil(photos.length / itemsPerPage), [photos.length, itemsPerPage]);
@@ -18,6 +22,9 @@ const GridView = ({ photos, openModal, itemsPerPage = 10 }) => {
     const endIndex = startIndex + itemsPerPage;
     return photos.slice(startIndex, endIndex);
   }, [photos, currentPage, itemsPerPage]);
+  // Range currently on screen
+  const rangeStart = ((currentPage - 1) * itemsPerPage) + 1;
+  const rangeEnd = Math.min(currentPage * itemsPerPage, photos.length);
   // Handle page change
   const handlePageChange = (page) => {
     if (page < 1 || page > totalPages) return;
@@ -27,6 +34,12 @@ const GridView = ({ photos, openModal, itemsPerPage = 10 }) => {
     if (countElement) {
       countElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
+    // The grid swaps without moving focus, so tell screen readers what is shown now
+    announce(t('portfolio.showing', {
+      start: ((page - 1) * itemsPerPage) + 1,
+      end: Math.min(page * itemsPerPage, photos.length),
+      total: photos.length
+    }));
   };
   // Generate page numbers with ellipsis for large page counts
   const getPageNumbers = () => {
@@ -58,7 +71,9 @@ const GridView = ({ photos, openModal, itemsPerPage = 10 }) => {
     }
     return pages;
   };
-  // Pagination button styles
+  // Pagination button styles (white on a dark chip / a darker gold, both >= 4.5:1)
+  const inactiveBackground = 'rgba(0, 0, 0, 0.25)';
+  const hoverBackground = 'rgba(138, 106, 58, 0.6)';
   const buttonStyle = {
     padding: '8px 14px',
     border: 'none',
@@ -71,13 +86,13 @@ const GridView = ({ photos, openModal, itemsPerPage = 10 }) => {
   };
   const activeButtonStyle = {
     ...buttonStyle,
-    backgroundColor: '#b08d57',
+    backgroundColor: '#8a6a3a',
     color: '#fff'
   };
   const inactiveButtonStyle = {
     ...buttonStyle,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    color: '#e5e7eb',
+    backgroundColor: inactiveBackground,
+    color: '#fff',
     backdropFilter: 'blur(10px)'
   };
   const disabledButtonStyle = {
@@ -98,25 +113,38 @@ const GridView = ({ photos, openModal, itemsPerPage = 10 }) => {
         style={{
           textAlign: 'center',
           marginBottom: '1.5rem',
-          color: '#9ca3af',
+          color: '#f3f4f6',
           fontSize: '14px',
           scrollMarginTop: '450px' // Account for fixed navigation
         }}>
-        Showing {((currentPage - 1) * itemsPerPage) + 1}-{Math.min(currentPage * itemsPerPage, photos.length)} of {photos.length} photos
+        {t('portfolio.showing', { start: rangeStart, end: rangeEnd, total: photos.length })}
       </div>
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(min(300px, 100%), 1fr))',
         gap: '2rem'
       }}>
         {currentPhotos.map((photo, index) => {
           const imgSrc = `${API_BASE}${photo.thumbnail || photo.url}`;
           const fullSrc = `${API_BASE}${photo.url}`;
           const isVideo = photo.mime_type && photo.mime_type.startsWith('video/');
+          const title = getMediaTitle(photo);
+          const label = title || t(isVideo ? 'portfolio.videoFallback' : 'portfolio.photoFallback', {
+            category: categoryName,
+            n: rangeStart + index
+          });
           return (
-            <div
+            <button
               key={photo.id || index}
+              type="button"
+              className="portfolio-tile"
+              aria-haspopup="dialog"
               style={{
+                display: 'block',
+                width: '100%',
+                padding: 0,
+                border: 'none',
+                background: 'none',
                 borderRadius: '12px',
                 overflow: 'hidden',
                 boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
@@ -124,13 +152,13 @@ const GridView = ({ photos, openModal, itemsPerPage = 10 }) => {
                 transition: 'transform 0.2s',
                 position: 'relative'
               }}
-              onClick={() => openModal(fullSrc, photo.title || '', isVideo)}
+              onClick={() => openModal(fullSrc, label, isVideo)}
               onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
               onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
             >
               <img
                 src={imgSrc}
-                alt={photo.title || ''}
+                alt={label}
                 style={{
                   width: '100%',
                   height: '250px',
@@ -138,73 +166,82 @@ const GridView = ({ photos, openModal, itemsPerPage = 10 }) => {
                 }}
                 loading="lazy"/>
               {isVideo && (
-                <div style={{
-                  position: 'absolute',
-                  top: '50%',
-                  left: '50%',
-                  transform: 'translate(-50%, -50%)',
-                  width: '60px',
-                  height: '60px',
-                  backgroundColor: 'rgba(0, 0, 0, 0.7)',
-                  borderRadius: '50%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  pointerEvents: 'none'
-                }}>
-                  <svg width="30" height="30" viewBox="0 0 24 24" fill="white">
-                    <path d="M8 5v14l11-7z"/>
-                  </svg>
-                </div>
+                <>
+                  <span style={{
+                    position: 'absolute',
+                    top: '50%',
+                    left: '50%',
+                    transform: 'translate(-50%, -50%)',
+                    width: '60px',
+                    height: '60px',
+                    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                    borderRadius: '50%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    pointerEvents: 'none'
+                  }}>
+                    <svg width="30" height="30" viewBox="0 0 24 24" fill="white" aria-hidden="true" focusable="false">
+                      <path d="M8 5v14l11-7z"/>
+                    </svg>
+                  </span>
+                  {title && <span className="sr-only">{t('portfolio.video')}</span>}
+                </>
               )}
-            </div>
+            </button>
           );
         })}
       </div>
       {/* Pagination Controls */}
       {totalPages > 1 && (
-        <div style={{
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          gap: '8px',
-          marginTop: '3rem',
-          flexWrap: 'wrap'
-        }}>
+        <nav
+          aria-label={t('portfolio.pagination')}
+          style={{
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            gap: '8px',
+            marginTop: '3rem',
+            flexWrap: 'wrap'
+          }}>
           {/* Previous Button */}
           <button
+            type="button"
             onClick={() => handlePageChange(currentPage - 1)}
             disabled={currentPage === 1}
             style={currentPage === 1 ? disabledButtonStyle : inactiveButtonStyle}
             onMouseEnter={(e) => {
               if (currentPage !== 1) {
-                e.currentTarget.style.backgroundColor = 'rgba(176, 141, 87, 0.3)';
+                e.currentTarget.style.backgroundColor = hoverBackground;
               }
             }}
             onMouseLeave={(e) => {
               if (currentPage !== 1) {
-                e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+                e.currentTarget.style.backgroundColor = inactiveBackground;
               }
             }}>
-            ← Prev
+            <span aria-hidden="true">←</span> {t('portfolio.prevPage')}
           </button>
           {/* Page Numbers */}
           {getPageNumbers().map((page, index) => (
             page === '...' ? (
-              <span key={`ellipsis-${index}`} style={{ color: '#9ca3af', padding: '0 4px' }}>...</span>
+              <span key={`ellipsis-${index}`} style={{ color: '#f3f4f6', padding: '0 4px' }}>...</span>
             ) : (
               <button
                 key={page}
+                type="button"
                 onClick={() => handlePageChange(page)}
+                aria-label={t('portfolio.pageN', { n: page })}
+                aria-current={page === currentPage ? 'page' : undefined}
                 style={page === currentPage ? activeButtonStyle : inactiveButtonStyle}
                 onMouseEnter={(e) => {
                   if (page !== currentPage) {
-                    e.currentTarget.style.backgroundColor = 'rgba(176, 141, 87, 0.3)';
+                    e.currentTarget.style.backgroundColor = hoverBackground;
                   }
                 }}
                 onMouseLeave={(e) => {
                   if (page !== currentPage) {
-                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+                    e.currentTarget.style.backgroundColor = inactiveBackground;
                   }
                 }}>
                 {page}
@@ -213,23 +250,24 @@ const GridView = ({ photos, openModal, itemsPerPage = 10 }) => {
           ))}
           {/* Next Button */}
           <button
+            type="button"
             onClick={() => handlePageChange(currentPage + 1)}
             disabled={currentPage === totalPages}
             style={currentPage === totalPages ? disabledButtonStyle : inactiveButtonStyle}
             onMouseEnter={(e) => {
               if (currentPage !== totalPages) {
-                e.currentTarget.style.backgroundColor = 'rgba(176, 141, 87, 0.3)';
+                e.currentTarget.style.backgroundColor = hoverBackground;
               }
             }}
             onMouseLeave={(e) => {
               if (currentPage !== totalPages) {
-                e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+                e.currentTarget.style.backgroundColor = inactiveBackground;
               }
             }}
           >
-            Next →
+            {t('portfolio.nextPage')} <span aria-hidden="true">→</span>
           </button>
-        </div>
+        </nav>
       )}
     </div>
   );

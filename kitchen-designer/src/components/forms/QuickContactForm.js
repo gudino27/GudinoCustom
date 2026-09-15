@@ -1,11 +1,15 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Upload, X, Image as ImageIcon, CheckCircle } from 'lucide-react';
+import { Upload, X, CheckCircle } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import Navigation from '../ui/Navigation';
 import Footer from '../ui/Footer';
+import SEO from '../ui/SEO';
+import { announce } from '../ui/LiveRegion';
 import '../css/testimonial-form.css';
-import { color } from 'three/src/nodes/TSL.js';
+
+// Accepts anything that looks like name@domain.tld; the server validates properly.
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const QuickContactForm = ({ onBack }) => {
   const navigate = useNavigate();
@@ -28,8 +32,39 @@ const QuickContactForm = ({ onBack }) => {
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState('');
+  // field name -> translation key of the message (kept as keys so the list
+  // follows a language switch)
+  const [fieldErrors, setFieldErrors] = useState({});
+
+  const successHeadingRef = useRef(null);
+  const errorSummaryRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   const API_BASE = process.env.REACT_APP_API_URL || 'https://api.gudinocustom.com';
+
+  const errorKeys = Object.keys(fieldErrors);
+  const hasSummary = errorKeys.length > 0 || Boolean(error);
+
+  const successMessage = t('quickQuote.successText');
+
+  // The confirmation replaces the form, so move focus to its heading (WCAG 2.4.3)
+  useEffect(() => {
+    if (submitted) {
+      successHeadingRef.current?.focus({ preventScroll: true });
+    }
+  }, [submitted]);
+
+  // Send focus to the error summary whenever a submit attempt fails
+  useEffect(() => {
+    if (Object.keys(fieldErrors).length > 0) {
+      errorSummaryRef.current?.focus();
+    }
+  }, [fieldErrors]);
+
+  const focusField = (event, id) => {
+    event.preventDefault();
+    document.getElementById(id)?.focus();
+  };
 
   // Budget range options
   const budgetRanges = {
@@ -83,29 +118,17 @@ const QuickContactForm = ({ onBack }) => {
     const maxFileSize = 10 * 1024 * 1024; // 10MB
 
     if (selectedFiles.length + files.length > maxFiles) {
-      setError(
-        currentLanguage === 'es'
-          ? `Solo puede cargar hasta ${maxFiles} fotos.`
-          : `You can only upload up to ${maxFiles} photos.`
-      );
+      setError(t('forms.error.maxPhotos', { max: maxFiles }));
       return;
     }
 
     const validFiles = files.filter((file) => {
       if (!file.type.startsWith('image/')) {
-        setError(
-          currentLanguage === 'es'
-            ? 'Por favor, cargue solo archivos de imagen.'
-            : 'Please only upload image files.'
-        );
+        setError(t('forms.error.imagesOnly'));
         return false;
       }
       if (file.size > maxFileSize) {
-        setError(
-          currentLanguage === 'es'
-            ? 'Cada archivo debe ser menor de 10MB.'
-            : 'Each file must be less than 10MB.'
-        );
+        setError(t('forms.error.fileTooBig'));
         return false;
       }
       return true;
@@ -130,23 +153,41 @@ const QuickContactForm = ({ onBack }) => {
   const removeFile = (index) => {
     setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
     setPreviewUrls((prev) => prev.filter((_, i) => i !== index));
+    // the button that was pressed is gone, so put focus somewhere sensible
+    setTimeout(() => fileInputRef.current?.focus(), 0);
+  };
+
+  const validate = () => {
+    const errors = {};
+    if (!formData.client_name.trim()) {
+      errors.client_name = 'forms.error.nameRequired';
+    }
+    if (!formData.client_email.trim()) {
+      errors.client_email = 'forms.error.emailRequired';
+    } else if (!EMAIL_PATTERN.test(formData.client_email.trim())) {
+      errors.client_email = 'forms.error.emailInvalid';
+    }
+    if (!formData.client_phone.trim()) {
+      errors.client_phone = 'forms.error.phoneRequired';
+    }
+    if (!formData.project_type) {
+      errors.project_type = 'forms.error.projectTypeRequired';
+    }
+    return errors;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
     setError('');
 
-    // Validate required fields
-    if (!formData.client_name || !formData.client_email || !formData.project_type) {
-      setError(
-        currentLanguage === 'es'
-          ? 'Por favor complete todos los campos requeridos.'
-          : 'Please fill in all required fields.'
-      );
-      setLoading(false);
+    // Validate required fields; messages are shown per field plus in a summary
+    const errors = validate();
+    setFieldErrors(errors);
+    if (Object.keys(errors).length > 0) {
       return;
     }
+
+    setLoading(true);
 
     try {
       const formDataWithFiles = new FormData();
@@ -173,21 +214,16 @@ const QuickContactForm = ({ onBack }) => {
 
       if (response.ok) {
         setSubmitted(true);
+        announce(successMessage);
         // Scroll to top to show success message
         window.scrollTo({ top: 0, behavior: 'smooth' });
       } else {
         const errorData = await response.json();
-        setError(errorData.error || (currentLanguage === 'es'
-          ? 'Error al enviar la solicitud. Por favor intente nuevamente.'
-          : 'Failed to submit request. Please try again.'));
+        setError(errorData.error || t('quickQuote.error.submitFailed'));
       }
     } catch (error) {
       console.error('Error submitting quote request:', error);
-      setError(
-        currentLanguage === 'es'
-          ? 'Error al enviar la solicitud. Por favor intente nuevamente.'
-          : 'Failed to submit request. Please try again.'
-      );
+      setError(t('quickQuote.error.submitFailed'));
     } finally {
       setLoading(false);
     }
@@ -196,33 +232,27 @@ const QuickContactForm = ({ onBack }) => {
   if (submitted) {
     return (
       <div style={{ minHeight: "100vh", background: "rgb(110,110,110)" }}>
+        <SEO title={t('quickQuote.pageTitle')} description={t('choice.quickQuote.description')} />
         <Navigation />
-        <div className="testimonial-container">
+        <main id="main-content" tabIndex={-1} className="testimonial-container">
           <div className="testimonial-form-card">
             <CheckCircle className="success-icon" />
-            <h2>
-              {currentLanguage === 'es'
-                ? '¡Solicitud Enviada!'
-                : 'Request Submitted!'}
-            </h2>
-            <p>
-              {currentLanguage === 'es'
-                ? 'Gracias por su interés en Gudino Custom Woodworking. Nos pondremos en contacto con usted dentro de 2-4 días hábiles.'
-                : 'Thank you for your interest in Gudino Custom Woodworking. We will contact you within 2-4 business days.'}
-            </p>
+            <h1 ref={successHeadingRef} tabIndex={-1}>
+              {t('quickQuote.successTitle')}
+            </h1>
+            <p>{successMessage}</p>
             <p className="text-sm text-gray-600 mt-4">
-              {currentLanguage === 'es'
-                ? 'Hemos enviado un correo electrónico de confirmación a su dirección de correo.'
-                : 'We have sent a confirmation email to your email address.'}
+              {t('quickQuote.successEmail')}
             </p>
             <button
+              type="button"
               onClick={() => navigate('/')}
               className="btn-primary mt-4"
             >
-              {currentLanguage === 'es' ? 'Volver al Inicio' : 'Return to Home'}
+              {t('appointments.backToHome')}
             </button>
           </div>
-        </div>
+        </main>
         <Footer />
       </div>
     );
@@ -230,41 +260,57 @@ const QuickContactForm = ({ onBack }) => {
 
   return (
     <div style={{ minHeight: "100vh", background: "rgb(110,110,110)", paddingBottom: "2rem" }}>
+      <SEO title={t('quickQuote.pageTitle')} description={t('choice.quickQuote.description')} />
       <Navigation />
       <div style={{ height: "2vh" }}></div>
-      <div className="testimonial-container">
+      <main id="main-content" tabIndex={-1} className="testimonial-container">
         <div className="testimonial-form-card">
-          <h2 className="testimonial-form-title text-4xl mb-6">
-            {currentLanguage === 'es'
-              ? 'Solicitar Cotización'
-              : 'Request a Quote'}
-          </h2>
+          <h1 className="testimonial-form-title text-4xl mb-6">
+            {t('quickQuote.heading')}
+          </h1>
           <p className="text-lg text-gray-600 mb-10">
-            {currentLanguage === 'es'
-              ? 'Complete este formulario y nos pondremos en contacto con usted para discutir su proyecto.'
-              : 'Fill out this form and we will contact you to discuss your project.'}
+            {t('quickQuote.intro')}
           </p>
 
-          {error && (
-            <div className="error-message" style={{ marginBottom: '1.5rem' }}>
-              {error}
-            </div>
-          )}
+          <p className="form-required-legend">{t('a11y.requiredLegend')}</p>
 
-          <form onSubmit={handleSubmit} className="testimonial-form">
+          {/* Kept in the DOM while empty so screen readers pick up the alert */}
+          <div
+            ref={errorSummaryRef}
+            role="alert"
+            tabIndex={-1}
+            className={hasSummary ? 'error-message' : undefined}
+            style={hasSummary ? { marginBottom: '1.5rem' } : undefined}
+          >
+            {errorKeys.length > 0 && (
+              <>
+                <p>{t('forms.errorSummary', { count: errorKeys.length })}</p>
+                <ul className="error-summary-list">
+                  {errorKeys.map((field) => (
+                    <li key={field}>
+                      <a href={`#${field}`} onClick={(e) => focusField(e, field)}>
+                        {t(fieldErrors[field])}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+            {error && <p>{error}</p>}
+          </div>
+
+          <form onSubmit={handleSubmit} className="testimonial-form" noValidate>
             {/* Contact Information */}
             <div className="form-section mb-10">
-              <h3 className="section-title text-2xl my-6">
+              <h2 className="section-title text-2xl my-6">
                 <strong style={{color:'black' ,important: true}}>
-                  {currentLanguage === 'es'
-                    ? 'Información de Contacto'
-                    : 'Contact Information'}
+                  {t('quickQuote.contactSection')}
                 </strong>
-              </h3>
+              </h2>
 
               <div className="form-group mb-6">
                 <label htmlFor="client_name" className="form-label text-base mb-2 block">
-                  {currentLanguage === 'es' ? 'Nombre Completo' : 'Full Name'} *
+                  {t('quickQuote.name')} <span aria-hidden="true">*</span>
                 </label>
                 <input
                   type="text"
@@ -274,13 +320,19 @@ const QuickContactForm = ({ onBack }) => {
                   onChange={handleInputChange}
                   className="form-input text-base py-3"
                   required
-                  placeholder='Enter Your Full Name'
+                  autoComplete="name"
+                  aria-invalid={fieldErrors.client_name ? 'true' : undefined}
+                  aria-describedby={fieldErrors.client_name ? 'client_name-error' : undefined}
+                  placeholder={t('appointments.namePlaceholder')}
                 />
+                {fieldErrors.client_name && (
+                  <p className="field-error" id="client_name-error">{t(fieldErrors.client_name)}</p>
+                )}
               </div>
 
               <div className="form-group mb-6">
                 <label htmlFor="client_email" className="form-label text-base mb-2 block">
-                  {currentLanguage === 'es' ? 'Correo Electrónico' : 'Email'} *
+                  {t('quickQuote.email')} <span aria-hidden="true">*</span>
                 </label>
                 <input
                   type="email"
@@ -290,13 +342,19 @@ const QuickContactForm = ({ onBack }) => {
                   onChange={handleInputChange}
                   className="form-input text-base py-3"
                   required
-                  placeholder='Enter Your Email'
+                  autoComplete="email"
+                  aria-invalid={fieldErrors.client_email ? 'true' : undefined}
+                  aria-describedby={fieldErrors.client_email ? 'client_email-error' : undefined}
+                  placeholder={t('appointments.emailPlaceholder')}
                 />
+                {fieldErrors.client_email && (
+                  <p className="field-error" id="client_email-error">{t(fieldErrors.client_email)}</p>
+                )}
               </div>
 
               <div className="form-group mb-6">
                 <label htmlFor="client_phone" className="form-label text-base mb-2 block">
-                  {currentLanguage === 'es' ? 'Teléfono' : 'Phone'} *
+                  {t('quickQuote.phone')} <span aria-hidden="true">*</span>
                 </label>
                 <input
                   type="tel"
@@ -305,25 +363,31 @@ const QuickContactForm = ({ onBack }) => {
                   value={formData.client_phone}
                   onChange={handleInputChange}
                   required
+                  autoComplete="tel"
                   className="form-input text-base py-3"
-                  placeholder="Enter Your Phone Number"
+                  aria-invalid={fieldErrors.client_phone ? 'true' : undefined}
+                  aria-describedby={
+                    fieldErrors.client_phone ? 'client_phone-hint client_phone-error' : 'client_phone-hint'
+                  }
                 />
+                <p className="form-hint" id="client_phone-hint">{t('forms.phoneHint')}</p>
+                {fieldErrors.client_phone && (
+                  <p className="field-error" id="client_phone-error">{t(fieldErrors.client_phone)}</p>
+                )}
               </div>
             </div>
 
             {/* Project Details */}
             <div className="form-section mb-10">
-              <h3 className="section-title text-2xl my-6">
+              <h2 className="section-title text-2xl my-6">
                 <strong style={{color:'black' ,important: true}}>
-                  {currentLanguage === 'es'
-                  ? 'Detalles del Proyecto'
-                  : 'Project Details'}
+                  {t('quickQuote.projectSection')}
                   </strong>
-              </h3>
+              </h2>
 
               <div className="form-group mb-6">
                 <label htmlFor="project_type" className="form-label text-base mb-2 block">
-                  {currentLanguage === 'es' ? 'Tipo de Proyecto' : 'Project Type'} *
+                  {t('quickQuote.projectType')} <span aria-hidden="true">*</span>
                 </label>
                 <select
                   id="project_type"
@@ -332,6 +396,8 @@ const QuickContactForm = ({ onBack }) => {
                   onChange={handleInputChange}
                   className="form-input text-base py-3"
                   required
+                  aria-invalid={fieldErrors.project_type ? 'true' : undefined}
+                  aria-describedby={fieldErrors.project_type ? 'project_type-error' : undefined}
                 >
                   {projectTypes[currentLanguage].map((option) => (
                     <option key={option.value} value={option.value}>
@@ -339,13 +405,14 @@ const QuickContactForm = ({ onBack }) => {
                     </option>
                   ))}
                 </select>
+                {fieldErrors.project_type && (
+                  <p className="field-error" id="project_type-error">{t(fieldErrors.project_type)}</p>
+                )}
               </div>
 
               <div className="form-group mb-6">
                 <label htmlFor="message" className="form-label text-base mb-2 block">
-                  {currentLanguage === 'es'
-                    ? 'Mensaje Adicional'
-                    : 'Additional Message'}
+                  {t('quickQuote.message')}
                 </label>
                 <textarea
                   id="message"
@@ -354,38 +421,32 @@ const QuickContactForm = ({ onBack }) => {
                   onChange={handleInputChange}
                   className="form-input text-base py-3"
                   rows="6"
-                  placeholder={
-                    currentLanguage === 'es'
-                      ? 'Cuéntenos más sobre su proyecto...'
-                      : 'Tell us more about your project...'
-                  }
+                  placeholder={t('quickQuote.messagePlaceholder')}
                 />
               </div>
             </div>
 
             {/* Inspiration Photos */}
             <div className="form-group mb-10">
-              <h3 className="section-title text-2xl my-6">
+              <h2 className="section-title text-2xl my-6">
                 <strong style={{color:'black' ,important: true}}>
-                  {currentLanguage === 'es'
-                    ? 'Fotos de Inspiración (Opcional)'
-                    : 'Inspiration Photos (Optional)'}
+                  {t('quickQuote.photosSection')}
                 </strong>
-              </h3>
-              <p className="text-base text-gray-600 mb-6">
-                {currentLanguage === 'es'
-                  ? 'Cargue hasta 5 fotos que le inspiren para su proyecto (máx. 10MB cada una)'
-                  : 'Upload up to 5 photos that inspire you for your project (max 10MB each)'}
+              </h2>
+              <p className="text-base text-gray-600 mb-6" id="photos-help">
+                {t('quickQuote.photosHelp')}
               </p>
 
               <div className="photo-upload-area">
                 <input
                   type="file"
                   id="photos"
+                  ref={fileInputRef}
                   accept="image/*"
                   multiple
                   onChange={handleFileChange}
                   className="file-input-hidden"
+                  aria-describedby="photos-help"
                   disabled={selectedFiles.length >= 5}
                 />
                 <label
@@ -395,15 +456,9 @@ const QuickContactForm = ({ onBack }) => {
                   }`}
                 >
                   <Upload className="upload-icon" />
-                  <span>
-                    {currentLanguage === 'es'
-                      ? 'Haga clic para cargar fotos'
-                      : 'Click to upload photos'}
-                  </span>
-                  <span className="text-sm text-gray-500">
-                    {currentLanguage === 'es'
-                      ? `${selectedFiles.length}/5 fotos cargadas`
-                      : `${selectedFiles.length}/5 photos uploaded`}
+                  <span>{t('forms.choosePhotos')}</span>
+                  <span className="text-sm text-gray-600">
+                    {t('quickQuote.photoCount', { n: selectedFiles.length })}
                   </span>
                 </label>
               </div>
@@ -412,12 +467,12 @@ const QuickContactForm = ({ onBack }) => {
                 <div className="photo-preview-grid">
                   {previewUrls.map((url, index) => (
                     <div key={index} className="photo-preview-item">
-                      <img src={url} alt={`Preview ${index + 1}`} />
+                      <img src={url} alt={t('forms.photoPreview', { n: index + 1 })} />
                       <button
                         type="button"
                         onClick={() => removeFile(index)}
                         className="remove-photo-button"
-                        aria-label="Remove photo"
+                        aria-label={t('forms.removePhoto', { n: index + 1 })}
                       >
                         <X size={16} />
                       </button>
@@ -434,21 +489,15 @@ const QuickContactForm = ({ onBack }) => {
                 className="btn-primary text-base py-3 px-6"
                 disabled={loading}
               >
-                {currentLanguage === 'es' ? 'Cancelar' : 'Cancel'}
+                {t('common.cancel')}
               </button>
               <button type="submit" className="btn-primary text-base py-3 px-6 my-2" disabled={loading}>
-                {loading
-                  ? currentLanguage === 'es'
-                    ? 'Enviando...'
-                    : 'Submitting...'
-                  : currentLanguage === 'es'
-                  ? 'Enviar Solicitud'
-                  : 'Submit Request'}
+                {loading ? t('quickQuote.submitting') : t('quickQuote.submit')}
               </button>
             </div>
           </form>
         </div>
-      </div>
+      </main>
       <Footer />
     </div>
   );

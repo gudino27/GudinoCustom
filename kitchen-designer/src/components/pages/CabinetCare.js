@@ -21,7 +21,7 @@ const CabinetCare = () => {
   return (
     <>
       <SEO
-        title="Cabinet Care & Maintenance Guide"
+        title={t('seo.cabinetCare.title')}
         description="Expert tips for cleaning and maintaining your custom kitchen cabinets and bathroom vanities. Learn how to protect your investment and keep your cabinets looking new."
         keywords="cabinet care, cabinet maintenance, cleaning wood cabinets, cabinet cleaning tips, protect cabinets, cabinet care guide"
         canonical="https://gudinocustom.com/cabinet-care"
@@ -29,7 +29,7 @@ const CabinetCare = () => {
       <div style={{background:"rgb(110,110,110)"}}>
         <Navigation />
         <div style={{ height: "3vh" }}></div>
-        <div className="sms-compliance-container">
+        <main id="main-content" tabIndex={-1} className="sms-compliance-container">
           <div className="sms-content">
             <h1 className="sms-header">{t("cabinetCare.title")}</h1>
             <p>
@@ -54,20 +54,20 @@ const CabinetCare = () => {
               <ul className="sms-list">
                 <li style={{ marginTop: "12px" }}>
                   <strong>{t("cabinetCare.attention.sink.title")}</strong>
+                  <p>{t("cabinetCare.attention.sink.content")}</p>
                 </li>
-                <p>{t("cabinetCare.attention.sink.content")}</p>
                 <li style={{ marginTop: "12px" }}>
                   <strong>{t("cabinetCare.attention.oven.title")}</strong>
+                  <p>{t("cabinetCare.attention.oven.content")}</p>
                 </li>
-                <p>{t("cabinetCare.attention.oven.content")}</p>
                 <li style={{ marginTop: "12px" }}>
                   <strong>{t("cabinetCare.attention.appliances.title")}</strong>
+                  <p>{t("cabinetCare.attention.appliances.content")}</p>
                 </li>
-                <p>{t("cabinetCare.attention.appliances.content")}</p>
                 <li style={{ marginTop: "12px" }}>
                   <strong>{t("cabinetCare.attention.trash.title")}</strong>
+                  <p>{t("cabinetCare.attention.trash.content")}</p>
                 </li>
-                <p>{t("cabinetCare.attention.trash.content")}</p>
                 <li style={{ marginTop: "12px" }}>
                   <strong>{t("cabinetCare.attention.dishwasher.title")}</strong>
                   <p>{t("cabinetCare.attention.dishwasher.content")}</p>
@@ -350,16 +350,16 @@ const CabinetCare = () => {
               <ul className="sms-list">
                 <li style={{ marginTop: "12px" }}>
                   <strong>{t("cabinetCare.lifetime.effect.title")}</strong>
+                  <p style={{ marginTop: "12px" }}>
+                    <strong>{t("cabinetCare.lifetime.effect.item1")}</strong>{" "}
+                    {t("cabinetCare.lifetime.effect.item2")}{" "}
+                    {t("cabinetCare.lifetime.effect.item3")}{" "}
+                    {t("cabinetCare.lifetime.effect.item4")}{" "}
+                    {t("cabinetCare.lifetime.effect.item5")}{" "}
+                    {t("cabinetCare.lifetime.effect.item6")}{" "}
+                    {t("cabinetCare.lifetime.effect.item7")}
+                  </p>
                 </li>
-                <p style={{ marginTop: "12px" }}>
-                  <strong>{t("cabinetCare.lifetime.effect.item1")}</strong>{" "}
-                  {t("cabinetCare.lifetime.effect.item2")}{" "}
-                  {t("cabinetCare.lifetime.effect.item3")}{" "}
-                  {t("cabinetCare.lifetime.effect.item4")}{" "}
-                  {t("cabinetCare.lifetime.effect.item5")}{" "}
-                  {t("cabinetCare.lifetime.effect.item6")}{" "}
-                  {t("cabinetCare.lifetime.effect.item7")}
-                </p>
               </ul>
               <div
                 style={{
@@ -505,11 +505,11 @@ const CabinetCare = () => {
                 }}
               >
                 <Download size={24} />
-                Download Complete Guide (PDF)
+                {t("cabinetCare.downloadGuide")}
               </button>
             </div>
           </div>
-        </div>
+        </main>
         <div style={{ height: "2vh" }}></div>
       </div>
       <Footer />

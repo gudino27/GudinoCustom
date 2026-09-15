@@ -1,0 +1,120 @@
+/* Error pages: 404, no-access, and the generic render-failure page. Sized in
+   dvh so mobile browser chrome does not clip the card.
+   Every class is prefixed: CRA keeps each page's CSS in the document once it
+   has been visited, and about.css / testimonial-form.css define their own
+   global .error-message and .error-card. */
+.error-page {
+    min-height: 70vh;
+    min-height: 70dvh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: clamp(3rem, 10vw, 7rem) 1.25rem;
+    background: linear-gradient(160deg, #2a2a2a 0%, #1a1a1a 100%);
+    color: #f2f3f2;
+}
+
+.error-page__card {
+    width: 100%;
+    max-width: 640px;
+    text-align: center;
+}
+
+/* aria-hidden in the JSX: a watermark that repeats the heading */
+.error-page__code {
+    font-size: clamp(3.5rem, 14vw, 6rem);
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: 0.04em;
+    color: rgba(242, 243, 242, 0.16);
+    margin-bottom: 0.25rem;
+}
+
+.error-page__title {
+    font-size: clamp(1.5rem, 5vw, 2.25rem);
+    margin: 0 0 0.85rem;
+    font-weight: 600;
+    color: #f2f3f2;
+}
+
+.error-page__message {
+    font-size: clamp(0.98rem, 2.6vw, 1.1rem);
+    line-height: 1.65;
+    color: rgba(242, 243, 242, 0.78);
+    margin: 0 auto 1.75rem;
+    max-width: 46ch;
+}
+
+.error-page__detail {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.82rem;
+    /* 5.6:1 on the card background; 50% was 4.4:1 */
+    color: rgba(242, 243, 242, 0.6);
+    word-break: break-word;
+    margin: -0.75rem auto 1.75rem;
+    max-width: 52ch;
+}
+
+.error-page__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    justify-content: center;
+    margin-bottom: 2rem;
+}
+
+.error-page__button {
+    display: inline-block;
+    padding: 0.8rem 1.6rem;
+    border-radius: 4px;
+    border: 1px solid rgba(242, 243, 242, 0.35);
+    background: transparent;
+    color: #f2f3f2;
+    font: inherit;
+    font-size: 0.95rem;
+    text-decoration: none;
+    cursor: pointer;
+    /* comfortable touch target on phones */
+    min-height: 44px;
+    transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.error-page__button:hover,
+.error-page__button:focus-visible {
+    background: rgba(242, 243, 242, 0.1);
+    border-color: rgba(242, 243, 242, 0.7);
+    color: #f2f3f2;
+}
+
+.error-page__button--primary {
+    background: #f2f3f2;
+    color: #1a1a1a;
+    border-color: #f2f3f2;
+}
+
+.error-page__button--primary:hover,
+.error-page__button--primary:focus-visible {
+    background: #ffffff;
+    color: #1a1a1a;
+}
+
+.error-page__help {
+    font-size: 0.9rem;
+    color: rgba(242, 243, 242, 0.6);
+    margin: 0;
+}
+
+.error-page__help a {
+    color: #f2f3f2;
+    text-decoration: underline;
+}
+
+@media (max-width: 480px) {
+    .error-page__actions {
+        flex-direction: column;
+    }
+
+    .error-page__button {
+        width: 100%;
+    }
+}

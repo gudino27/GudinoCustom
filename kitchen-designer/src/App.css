@@ -38,12 +38,31 @@ svg g:not([data-dragging="true"]) {
   transition: opacity 0.2s ease-in-out;
 }
 
-/* Custom focus styles */
-input:focus,
-select:focus,
-textarea:focus {
+/* Keyboard focus ring for the whole site (WCAG 2.4.7 / 1.4.11).
+   #1d4ed8 is 6.7:1 on white; the thin white inner ring keeps the outline
+   visible on the gray rgb(110,110,110) page background as well. */
+:focus-visible,
+.btn:focus-visible {
+  outline: 3px solid #1d4ed8;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px #ffffff;
+}
+
+/* Dark surfaces: white ring with a black inner ring (about 17:1 either way) */
+.navbar :focus-visible,
+.footer-glass :focus-visible,
+.error-page :focus-visible,
+.sms-content :focus-visible,
+.hero-section :focus-visible {
+  outline-color: #ffffff;
+  box-shadow: 0 0 0 2px #000000;
+}
+
+/* The page container is focused after a route change and by the skip link so
+   screen readers start at the new content. It is not a control, so no ring. */
+#main-content:focus {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  box-shadow: none;
 }
 
 /* Hover effects for buttons */

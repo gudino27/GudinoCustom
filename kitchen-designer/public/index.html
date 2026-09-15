@@ -4,6 +4,20 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+
+  <!-- Set <html lang> from the saved language before React boots, so screen
+       readers never read the first paint in the wrong language (WCAG 3.1.1).
+       LanguageContext keeps it in step after that. -->
+  <script>
+    (function () {
+      var saved = null;
+      try { saved = localStorage.getItem('kitchen-designer-language'); } catch (e) { /* storage blocked */ }
+      var lang = (saved === 'en' || saved === 'es')
+        ? saved
+        : ((navigator.language || '').toLowerCase().indexOf('es') === 0 ? 'es' : 'en');
+      document.documentElement.lang = lang;
+    })();
+  </script>
   <meta name="theme-color" content="#1f2937" />
   <meta name="description"
     content="Expert carpenters specializing in kitchen remodeling, bathroom renovations, custom cabinet installation, and home remodeling throughout Washington. Professional carpentry services by Gudino Custom Woodworking." />
@@ -130,7 +144,20 @@
 
   <!-- Service Worker Registration -->
   <script>
-    if ('serviceWorker' in navigator) {
+    // The SW caches /static/js/* aggressively, which on a dev server serves
+    // stale bundles after every edit. Skip it on localhost and tear down any
+    // registration left behind from a previous visit.
+    var __isLocalDev = ['localhost', '127.0.0.1', '0.0.0.0', '[::1]'].indexOf(location.hostname) !== -1;
+    if (__isLocalDev && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function (rs) {
+        rs.forEach(function (r) { r.unregister(); });
+      });
+      if (window.caches) {
+        caches.keys().then(function (keys) { keys.forEach(function (k) { caches.delete(k); }); });
+      }
+    }
+
+    if (!__isLocalDev && 'serviceWorker' in navigator) {
       // Prevent reload loops - track if we just reloaded
       const wasReloaded = sessionStorage.getItem('sw_reload');
       if (wasReloaded) {
@@ -180,8 +207,19 @@
           });
       });
 
-      // Show a notification when update is available
+      // Show a notification when update is available. It stays until the
+      // visitor chooses Update or Later (no time limit, WCAG 2.2.1) and is
+      // announced politely through role="status" (WCAG 4.1.3).
       function showUpdateNotification(newWorker) {
+        // This runs outside React, so the strings come from a small dictionary
+        // keyed on the saved site language rather than from translations.js.
+        let saved = null;
+        try { saved = localStorage.getItem('kitchen-designer-language'); } catch (e) { /* storage blocked */ }
+        const lang = (saved === 'es' || (!saved && document.documentElement.lang === 'es')) ? 'es' : 'en';
+        const text = lang === 'es'
+          ? { message: 'Nueva versión disponible', update: 'Actualizar', later: 'Más tarde' }
+          : { message: 'New version available', update: 'Update', later: 'Later' };
+
         const notification = document.createElement('div');
         notification.style.cssText = `
           position: fixed;
@@ -200,28 +238,34 @@
           align-items: center;
           gap: 15px;
         `;
-        notification.innerHTML = `
-          <span>New version available!</span>
-          <button onclick="this.parentElement.refreshApp()" style="
-            background: #3b82f6;
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 14px;
-          ">Update</button>
-          <button onclick="this.parentElement.remove()" style="
-            background: transparent;
-            color: white;
-            border: 1px solid #6b7280;
-            padding: 8px 16px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 14px;
-          ">Later</button>
+
+        // filled in after the region is in the DOM, so it is announced
+        const message = document.createElement('span');
+        message.setAttribute('role', 'status');
+
+        const buttonStyle = `
+          padding: 8px 16px;
+          border-radius: 6px;
+          cursor: pointer;
+          font-size: 14px;
+          min-height: 24px;
         `;
-        notification.refreshApp = () => {
+        const updateButton = document.createElement('button');
+        updateButton.type = 'button';
+        updateButton.textContent = text.update;
+        // #1d4ed8 with white text is 6.7:1; #3b82f6 was 3.68:1
+        updateButton.style.cssText = buttonStyle + 'background: #1d4ed8; color: white; border: none;';
+
+        const laterButton = document.createElement('button');
+        laterButton.type = 'button';
+        laterButton.textContent = text.later;
+        laterButton.style.cssText = buttonStyle + 'background: transparent; color: white; border: 1px solid #9ca3af;';
+
+        notification.appendChild(message);
+        notification.appendChild(updateButton);
+        notification.appendChild(laterButton);
+
+        updateButton.addEventListener('click', () => {
           // User explicitly clicked "Update" - allow reload
           allowReload = true;
           newWorker.postMessage({ type: 'SKIP_WAITING' });
@@ -236,11 +280,12 @@
               window.location.reload();
             }
           });
-        };
+        });
+
+        laterButton.addEventListener('click', () => notification.remove());
+
         document.body.appendChild(notification);
-        
-        // Auto-dismiss after 30 seconds
-        setTimeout(() => notification.remove(), 30000);
+        setTimeout(() => { message.textContent = text.message; }, 100);
       }
 
       // Listen for messages from service worker

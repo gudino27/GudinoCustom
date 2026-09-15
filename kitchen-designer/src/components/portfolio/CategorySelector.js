@@ -14,12 +14,15 @@ const CategorySelector = ({
 }) => {
   return (
     <div className="category-container">
-      <h2 className="text-white mb-4">{t("portfolio.selectCategory")}</h2>
-      <div className="category-buttons">
+      <h1 className="portfolio-heading">{t("portfolio.heading")}</h1>
+      <h2 id="portfolio-category-heading" className="text-white mb-4">{t("portfolio.selectCategory")}</h2>
+      <div className="category-buttons" role="group" aria-labelledby="portfolio-category-heading">
         {categories.map((cat) => (
           <button
             key={cat}
+            type="button"
             className={`category-button ${cat === currentCategory ? "active" : ""}`}
+            aria-pressed={cat === currentCategory}
             onClick={() => selectCategory(cat)}
           >
             {getCategoryName(cat)}
@@ -37,18 +40,20 @@ const CategorySelector = ({
           flexWrap: 'wrap'
         }}>
           <button
+            type="button"
             className={`category-button ${viewMode === 'beforeAfter' ? 'active' : ''}`}
+            aria-pressed={viewMode === 'beforeAfter'}
             onClick={() => setViewMode('beforeAfter')}
-            style={{ minWidth: '120px' }}
           >
-            Before/After
+            {t("portfolio.viewBeforeAfter")}
           </button>
           <button
+            type="button"
             className={`category-button ${viewMode === 'grid' ? 'active' : ''}`}
+            aria-pressed={viewMode === 'grid'}
             onClick={() => setViewMode('grid')}
-            style={{ minWidth: '120px' }}
           >
-            Grid View
+            {t("portfolio.viewGrid")}
           </button>
         </div>
       )}

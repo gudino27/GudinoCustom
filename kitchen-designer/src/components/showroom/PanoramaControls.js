@@ -11,7 +11,13 @@ const PanoramaControls = ({
   autoRotate = false,
   autoRotateSpeed = 0.5,
   minFov = 30,
-  maxFov = 120
+  maxFov = 120,
+  // Filled with { look(leftDegrees, upDegrees), zoom(fovDelta) } so the on-screen
+  // buttons and the arrow / +- keys outside the canvas can drive the camera.
+  controlsRef = null,
+  // The focusable wrapper around the canvas. The wheel is only taken over while
+  // it has focus, so the page can still be scrolled with the mouse.
+  viewerRef = null
 }) => {
   const { camera, gl } = useThree();
   const isDragging = useRef(false);
@@ -100,8 +106,33 @@ const PanoramaControls = ({
     }
   }, [autoRotate]);
 
+  // Hold auto-rotate while the visitor is steering, then let it pick up again
+  const holdAutoRotate = useCallback(() => {
+    isUserInteracting.current = true;
+    if (autoRotateTimeout.current) {
+      clearTimeout(autoRotateTimeout.current);
+    }
+    if (autoRotate) {
+      autoRotateTimeout.current = setTimeout(() => {
+        isUserInteracting.current = false;
+      }, 3000);
+    }
+  }, [autoRotate]);
+
+  // Start moving again as soon as auto-rotate is switched back on
+  useEffect(() => {
+    if (autoRotate) {
+      isUserInteracting.current = false;
+    }
+  }, [autoRotate]);
+
   // Handle scroll/wheel for zoom (FOV change)
   const handleWheel = useCallback((event) => {
+    // Only take the wheel over while the viewer has focus, otherwise the canvas
+    // would swallow every scroll over most of the viewport.
+    const viewer = viewerRef?.current;
+    if (viewer && !viewer.contains(document.activeElement)) return;
+
     event.preventDefault();
 
     const zoomSpeed = 0.05;
@@ -109,7 +140,33 @@ const PanoramaControls = ({
 
     camera.fov = Math.max(minFov, Math.min(maxFov, camera.fov + delta));
     camera.updateProjectionMatrix();
-  }, [camera, minFov, maxFov]);
+  }, [camera, minFov, maxFov, viewerRef]);
+
+  // Expose look / zoom to the on-screen buttons and the keyboard handler
+  useEffect(() => {
+    if (!controlsRef) return undefined;
+
+    controlsRef.current = {
+      // Positive leftDegrees turns left, positive upDegrees tilts up
+      look: (leftDegrees, upDegrees) => {
+        holdAutoRotate();
+        targetSpherical.current.theta += THREE.MathUtils.degToRad(leftDegrees);
+        targetSpherical.current.phi = Math.max(
+          0.1,
+          Math.min(Math.PI - 0.1, targetSpherical.current.phi - THREE.MathUtils.degToRad(upDegrees))
+        );
+      },
+      // Negative fovDelta zooms in
+      zoom: (fovDelta) => {
+        camera.fov = Math.max(minFov, Math.min(maxFov, camera.fov + fovDelta));
+        camera.updateProjectionMatrix();
+      }
+    };
+
+    return () => {
+      controlsRef.current = null;
+    };
+  }, [controlsRef, holdAutoRotate, camera, minFov, maxFov]);
 
   // Handle touch pinch zoom
   const handleTouchStart = useCallback((event) => {

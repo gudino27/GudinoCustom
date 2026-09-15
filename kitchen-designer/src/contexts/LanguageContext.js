@@ -29,9 +29,11 @@ export const LanguageProvider = ({ children }) => {
 
   const [currentLanguage, setCurrentLanguage] = useState(getInitialLanguage);
 
-  // Save language preference to localStorage
+  // Save language preference to localStorage, and keep <html lang> in step so
+  // screen readers switch pronunciation with the content (WCAG 3.1.1)
   useEffect(() => {
     localStorage.setItem('kitchen-designer-language', currentLanguage);
+    document.documentElement.setAttribute('lang', currentLanguage);
   }, [currentLanguage]);
 
   // Translation function with simple interpolation support
@@ -67,11 +69,14 @@ export const LanguageProvider = ({ children }) => {
 
   const value = {
     currentLanguage,
+    // Alias: several components destructure `language`
+    language: currentLanguage,
     changeLanguage,
     t,
+    // nativeName is each language's own name, shown with a matching lang attribute
     availableLanguages: [
-      { code: 'en', name: 'English', nativeName: 'EN' },
-      { code: 'es', name: 'Spanish', nativeName: 'ES' }
+      { code: 'en', name: 'English', nativeName: 'English' },
+      { code: 'es', name: 'Spanish', nativeName: 'Español' }
     ]
   };
 

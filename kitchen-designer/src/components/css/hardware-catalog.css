@@ -4,6 +4,97 @@
   to { transform: rotate(360deg); }
 }
 
+.catalog-heading {
+  color: #ffffff;
+  text-align: center;
+  font-size: 2rem;
+  font-weight: 600;
+  line-height: 1.3;
+  margin: 0 0 1rem;
+}
+
+/* The scroll region is a tab stop so it can be scrolled from the keyboard */
+.pdf-scroll-container:focus-visible {
+  outline: 3px solid #ffffff;
+  outline-offset: 2px;
+}
+
+/* One page = canvas (decorative) + the pdf.js text layer on top of it */
+.pdf-page {
+  position: relative;
+  max-width: 95%;
+  --total-scale-factor: 1;
+  --scale-round-x: 1px;
+  --scale-round-y: 1px;
+}
+
+.pdf-page-canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+  border-radius: 0.25rem;
+}
+
+/* Text layer rules, taken from pdfjs-dist/web/pdf_viewer.css */
+.pdf-page .textLayer {
+  position: absolute;
+  inset: 0;
+  overflow: clip;
+  opacity: 1;
+  line-height: 1;
+  text-align: initial;
+  text-size-adjust: none;
+  forced-color-adjust: none;
+  transform-origin: 0 0;
+  caret-color: CanvasText;
+  z-index: 0;
+  --min-font-size: 1;
+  --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
+  --min-font-size-inv: calc(1 / var(--min-font-size));
+}
+
+.pdf-page .textLayer span,
+.pdf-page .textLayer br {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+}
+
+.pdf-page .textLayer > :not(.markedContent),
+.pdf-page .textLayer .markedContent span:not(.markedContent) {
+  z-index: 1;
+  --font-height: 0;
+  font-size: calc(var(--text-scale-factor) * var(--font-height));
+  --scale-x: 1;
+  --rotate: 0deg;
+  transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv));
+}
+
+.pdf-page .textLayer .markedContent {
+  display: contents;
+}
+
+.pdf-page .textLayer ::selection {
+  background: rgba(0, 0, 255, 0.25);
+}
+
+.pdf-page .textLayer br::selection {
+  background: transparent;
+}
+
+/* pdf.js measures text in a canvas it appends to <body> */
+.hiddenCanvasElement {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  display: none;
+}
+
 /* Custom scrollbar styling - sleek and minimal */
 .pdf-scroll-container::-webkit-scrollbar {
   width: 10px;
@@ -59,8 +150,11 @@
     margin-bottom: 0.5rem !important;
   }
 
-  .pdf-page-canvas {
+  .pdf-page {
     max-width: 98% !important;
+  }
+
+  .pdf-page-canvas {
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3) !important;
   }
 
@@ -91,8 +185,11 @@
     margin-bottom: 0 !important;
   }
 
-  .pdf-page-canvas {
+  .pdf-page {
     max-width: 100% !important;
+  }
+
+  .pdf-page-canvas {
     border-radius: 0 !important;
   }
 }

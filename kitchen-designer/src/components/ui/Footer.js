@@ -22,21 +22,21 @@ const Footer = () => {
           <Link to="/sms-consent-verification" className="footer-link">
             {t('footer.smsConsent')}
           </Link>
-          <span className="footer-separator">|</span>
+          <span className="footer-separator" aria-hidden="true">|</span>
           <Link to="/sms-terms" className="footer-link">
             {t('footer.terms')}
           </Link>
-          <span className="footer-separator">|</span>
+          <span className="footer-separator" aria-hidden="true">|</span>
           <Link to="/privacy" className="footer-link">
             {t('footer.privacy')}
           </Link>
-          <span className="footer-separator">|</span>
+          <span className="footer-separator" aria-hidden="true">|</span>
           <Link to="/cabinet-Care" className="footer-link">
             {t('footer.cabinetCare')}
           </Link>
-          <span className="footer-separator">|</span>
+          <span className="footer-separator" aria-hidden="true">|</span>
           <Link to="/hardware-catalog" className="footer-link">
-            Hardware Catalog
+            {t('footer.hardwareCatalog')}
           </Link>
         </div>
         

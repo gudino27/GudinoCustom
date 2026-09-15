@@ -1,5 +1,7 @@
 import React from 'react';
 import { getMaterialById } from '../../constants/materials';
+import { getElementName } from './elementName';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 const DraggableCabinet = React.memo(({
   element,
@@ -9,11 +11,15 @@ const DraggableCabinet = React.memo(({
   selectedElement,
   dragPreviewPosition,
   onMouseDown,
+  onKeyDown,
+  ariaLabel,
+  describedBy,
   elementTypes,
   renderCornerCabinet,
   renderDoorGraphic,
   currentRoomData
 }) => {
+  const { t } = useLanguage();
   const elementSpec = elementTypes[element.type];
 
   // Skip rendering if elementSpec is missing
@@ -26,16 +32,28 @@ const DraggableCabinet = React.memo(({
   const materialData = element.materialId ? getMaterialById(element.materialId) : null;
   const materialColor = materialData ? materialData.hex : null;
 
+  // Keyboard access (WCAG 2.1.1): only when the page wires up a key handler
+  const keyboardProps = onKeyDown ? {
+    tabIndex: 0,
+    role: 'button',
+    'aria-pressed': isSelected,
+    'aria-label': ariaLabel,
+    'aria-describedby': describedBy,
+    className: 'kd-el',
+    onKeyDown: (e) => onKeyDown(e, element.id)
+  } : {};
+
   // Special Rendering for Corner Cabinets
   if (element.type === 'corner' || element.type === 'corner-wall') {
     return (
-      <g 
+      <g
         key={element.id}
         data-element-id={element.id}
         transform={`translate(${element.x}, ${element.y})`}
-        style={{ 
+        style={{
           cursor: isDragging && element.id === selectedElement ? 'grabbing' : 'grab'
         }}
+        {...keyboardProps}
       >
         {/* Render the corner cabinet with built-in door graphics */}
         {renderCornerCabinet(element)}
@@ -82,6 +100,21 @@ const DraggableCabinet = React.memo(({
           {currentRoomData.elements.indexOf(element) + 1}
         </text>
 
+        {onKeyDown && (
+          <rect
+            className="kd-focus-ring"
+            x={-4}
+            y={-4}
+            width={element.width * scale + 8}
+            height={element.width * scale + 8}
+            fill="none"
+            stroke="#1d4ed8"
+            strokeWidth="3"
+            rx="3"
+            opacity="0"
+            pointerEvents="none"
+          />
+        )}
       </g>
     );
   }
@@ -101,9 +134,10 @@ const DraggableCabinet = React.memo(({
       transform={element.rotation !== 0 
         ? `translate(${element.x + displayWidth / 2}, ${element.y + displayDepth / 2}) rotate(${element.rotation}) translate(${-displayWidth / 2}, ${-displayDepth / 2})`
         : `translate(${element.x}, ${element.y})`}
-      style={{ 
+      style={{
         cursor: isDragging && element.id === selectedElement ? 'grabbing' : 'grab'
       }}
+      {...keyboardProps}
     >
 
       {/* Main Element Body */}
@@ -526,7 +560,7 @@ const DraggableCabinet = React.memo(({
         fill="#666"
         fontFamily="Arial, sans-serif"
       >
-        {elementSpec.name}
+        {getElementName(t, element.type, elementTypes)}
       </text>
 
       {/* Dimension Labels */}
@@ -558,6 +592,27 @@ const DraggableCabinet = React.memo(({
         </g>
       )}
 
+      {onKeyDown && (() => {
+        // Same offset the medicine-mirror body uses, so the ring surrounds it
+        const ringOffset = element.type === 'medicine-mirror'
+          ? ({ 90: { x: 0, y: 30 }, 270: { x: -40, y: 28 }, '-90': { x: -40, y: 28 } }[element.rotation] || { x: 0, y: 0 })
+          : { x: 0, y: 0 };
+        return (
+          <rect
+            className="kd-focus-ring"
+            x={ringOffset.x - 4}
+            y={ringOffset.y - 4}
+            width={element.width * scale + 8}
+            height={element.depth * scale + 8}
+            fill="none"
+            stroke="#1d4ed8"
+            strokeWidth="3"
+            rx="3"
+            opacity="0"
+            pointerEvents="none"
+          />
+        );
+      })()}
     </g>
   );
 });
