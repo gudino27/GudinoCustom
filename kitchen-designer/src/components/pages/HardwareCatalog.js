@@ -233,7 +233,7 @@ const HardwareCatalog = () => {
     <>
       <SEO
         title={t('seo.hardware.title')}
-        description="Browse our exclusive collection of premium cabinet handles and pulls. From modern Skyline to classic Heritage collections, find the perfect hardware for your custom cabinets."
+        description={t('seo.hardware.description')}
         keywords="cabinet hardware, cabinet pulls, cabinet handles, kitchen hardware, bathroom hardware, premium hardware, cabinet knobs"
         canonical="https://gudinocustom.com/hardware-catalog"
       />

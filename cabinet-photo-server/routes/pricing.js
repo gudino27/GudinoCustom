@@ -6,13 +6,22 @@ const { authenticateUser, requireRole } = require("../middleware/auth");
 const { validatePricing, validateMaterials } = require("../middleware/validation");
 const { getDb, queueDbOperation } = require("../db-helpers");
 const { handleError } = require("../utils/error-handler");
+const {
+  DESIGNER_BASE_PRICES,
+  DEFAULT_WALL_PRICING,
+  WALL_PRICING_TABLE,
+} = require("../utils/price-defaults");
+// Prices come back from the database over the defaults, so an item the
+// designer offers always has a price even before the seed in init-database.js
+// has run (appliances and fixtures default to 0 = not in the estimate).
+// Adding keys keeps the response backward compatible.
 // Get all the pricing data
 router.get("/", async (req, res) => {
   try {
     const db = await getDb();
     // Get cabinet prices
     const cabinetPrices = await db.all("SELECT * FROM cabinet_prices");
-    const basePrices = {};
+    const basePrices = { ...DESIGNER_BASE_PRICES };
     cabinetPrices.forEach((item) => {
       basePrices[item.cabinet_type] = parseFloat(item.base_price);
     });
@@ -34,11 +43,10 @@ router.get("/", async (req, res) => {
       colorPricing[key] = parseFloat(item.price_addition);
     });
     // Get wall pricing
-    let wallPricing = { addWall: 1500, removeWall: 2000 };
+    const wallPricing = { ...DEFAULT_WALL_PRICING };
     try {
       const walls = await db.all("SELECT * FROM wall_pricing");
       if (walls.length > 0) {
-        wallPricing = {};
         walls.forEach((item) => {
           wallPricing[item.modification_type] = parseFloat(item.price);
         });
@@ -72,13 +80,16 @@ router.put("/cabinets", authenticateUser, requireRole('super_admin'), validatePr
       // Use a transaction for consistency
       await db.run("BEGIN TRANSACTION");
       try {
-        // Update each cabinet price
+        // Upsert each cabinet price: a type without a row yet (a new
+        // designer item, an appliance the shop starts pricing) is inserted
+        // instead of the UPDATE silently doing nothing
         for (const [cabinetType, price] of Object.entries(prices)) {
           await db.run(
-            `UPDATE cabinet_prices 
-             SET base_price = ?, updated_at = CURRENT_TIMESTAMP 
-             WHERE cabinet_type = ?`,
-            [price, cabinetType]
+            `INSERT INTO cabinet_prices (cabinet_type, base_price, updated_at)
+             VALUES (?, ?, CURRENT_TIMESTAMP)
+             ON CONFLICT(cabinet_type) DO UPDATE
+             SET base_price = excluded.base_price, updated_at = CURRENT_TIMESTAMP`,
+            [cabinetType, price]
           );
         }
         await db.run("COMMIT");
@@ -99,7 +110,7 @@ router.get("/cabinets", async (req, res) => {
     const rows = await db.all(
       "SELECT * FROM cabinet_prices ORDER BY cabinet_type"
     );
-    const cabinets = {};
+    const cabinets = { ...DESIGNER_BASE_PRICES };
     rows.forEach((row) => {
       cabinets[row.cabinet_type] = parseFloat(row.base_price);
     });
@@ -241,29 +252,16 @@ router.get("/walls", async (req, res) => {
   try {
     const db = await getDb();
     // Ensure wall_pricing table exists
-    await db.run(`
-      CREATE TABLE IF NOT EXISTS wall_pricing (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        modification_type TEXT UNIQUE NOT NULL,
-        price REAL NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-    // Try to get wall pricing from database
+    await db.run(WALL_PRICING_TABLE);
+    // Database values over the defaults (addWall, removeWall, pantryWall,
+    // casedOpening)
     const rows = await db.all(
       "SELECT * FROM wall_pricing ORDER BY modification_type"
     );
-    const walls = {};
-    if (rows.length > 0) {
-      rows.forEach((row) => {
-        walls[row.modification_type] = parseFloat(row.price);
-      });
-    } else {
-      // Return default values if no data in database
-      walls.addWall = 1500;
-      walls.removeWall = 2000;
-    }
+    const walls = { ...DEFAULT_WALL_PRICING };
+    rows.forEach((row) => {
+      walls[row.modification_type] = parseFloat(row.price);
+    });
     console.log("Loaded wall pricing:", walls);
     res.json(walls);
   } catch (error) {
@@ -277,15 +275,7 @@ router.put("/walls", authenticateUser, requireRole('super_admin'), validatePrici
     await queueDbOperation(async () => {
       const db = await getDb();
       // Ensure wall_pricing table exists
-      await db.run(`
-        CREATE TABLE IF NOT EXISTS wall_pricing (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          modification_type TEXT UNIQUE NOT NULL,
-          price REAL NOT NULL,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-      `);
+      await db.run(WALL_PRICING_TABLE);
       // Use a transaction for better performance and consistency
       await db.run("BEGIN TRANSACTION");
       try {

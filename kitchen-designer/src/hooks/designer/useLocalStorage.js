@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { normalizeRoomData, unknownTypeIds } from '../../utils/designer/normalizeDesign';
 export const useLocalStorage = ({
   kitchenData,
   bathroomData,
@@ -12,64 +13,32 @@ export const useLocalStorage = ({
 }) => {
   // Load saved state on component mount
   useEffect(() => {
-    const savedKitchen = localStorage.getItem("kitchenDesignState");
-    const savedBathroom = localStorage.getItem("bathroomDesignState");
-
-    if (savedKitchen) {
-      const state = JSON.parse(savedKitchen);
-      // Clean up invalid elements that might exist from previous versions
-      const validElements = state.elements
-        ? state.elements.filter((element) => {
-            const isValid = elementTypes[element.type];
-            if (!isValid) {
-              console.warn(
-                "Removing invalid element type from saved data:",
-                element.type
-              );
-            }
-            return isValid;
-          })
-        : [];
-
-      // Migrate old data format - ensure wall data exists
-      const migratedState = {
-        ...state,
-        elements: validElements,
-        customWalls: state.customWalls || [],
-        allAvailableWalls: state.allAvailableWalls || [1, 2, 3, 4],
-        originalWalls: state.originalWalls || [1, 2, 3, 4],
-        doors: state.doors || [],
-      };
-      setKitchenData(migratedState);
-    }
-
-    if (savedBathroom) {
-      const state = JSON.parse(savedBathroom);
-      // Clean up invalid elements that might exist from previous versions
-      const validElements = state.elements
-        ? state.elements.filter((element) => {
-            const isValid = elementTypes[element.type];
-            if (!isValid) {
-              console.warn(
-                "Removing invalid element type from saved data:",
-                element.type
-              );
-            }
-            return isValid;
-          })
-        : [];
-
-      // Migrate old data format - ensure wall data exists
-      const migratedState = {
-        ...state,
-        elements: validElements,
-        customWalls: state.customWalls || [],
-        allAvailableWalls: state.allAvailableWalls || [1, 2, 3, 4],
-        originalWalls: state.originalWalls || [1, 2, 3, 4],
-        doors: state.doors || [],
-      };
-      setBathroomData(migratedState);
-    }
+    // Older saves: negative rotations, missing fields, walls / pantries in
+    // an older shape (utils/designer/normalizeDesign.js). Items of a type
+    // this version does not know cannot be drawn or edited here: left out.
+    const restore = (key, setData) => {
+      let saved = null;
+      try {
+        saved = localStorage.getItem(key);
+      } catch {
+        saved = null;
+      }
+      if (!saved) return;
+      const { roomData, issues } = normalizeRoomData(saved, { elementTypes });
+      if (!roomData) return;
+      const unknown = unknownTypeIds(issues);
+      issues
+        .filter((i) => i.code === "unknown-type")
+        .forEach((i) =>
+          console.warn("Removing invalid element type from saved data:", i.type)
+        );
+      setData({
+        ...roomData,
+        elements: roomData.elements.filter((el) => !unknown.has(String(el.id))),
+      });
+    };
+    restore("kitchenDesignState", setKitchenData);
+    restore("bathroomDesignState", setBathroomData);
   }, []); // Only run on mount
 
   // Save state whenever data changes (auto-save functionality)

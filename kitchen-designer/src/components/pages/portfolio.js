@@ -515,7 +515,7 @@ const Portfolio = () => {
     <>
       <SEO
         title={t("seo.portfolio.title")}
-        description="Browse our extensive portfolio of custom kitchen cabinets, bathroom vanities, and woodworking projects in Washington. Quality craftsmanship showcased."
+        description={t("seo.portfolio.description")}
         keywords="kitchen portfolio, bathroom remodeling gallery, custom cabinet photos, woodworking projects, before and after, Washington remodeling"
         canonical="https://gudinocustom.com/portfolio"
       />

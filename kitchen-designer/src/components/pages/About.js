@@ -212,7 +212,7 @@ const About = () => {
         <>
             <SEO
                 title={t('seo.about.title')}
-                description="Meet the craftsmen behind Gudino Custom. Family-owned carpentry business serving Washington since 2010. Expert kitchen and bathroom remodeling with dedication to quality."
+                description={t('seo.about.description')}
                 keywords="about us, carpentry team, master carpenters, family owned business, Washington contractors, craftsmen, woodworking experts"
                 canonical="https://gudinocustom.com/about"
             />

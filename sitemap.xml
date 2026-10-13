@@ -1,98 +1,183 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <!-- Main Pages -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
   <url>
     <loc>https://gudinocustom.com/</loc>
-    <lastmod>2025-07-30T17:00:00.000Z</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>1.0</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://gudinocustom.com/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://gudinocustom.com/es"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://gudinocustom.com/"/>
+  </url>
+  <url>
+    <loc>https://gudinocustom.com/es</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://gudinocustom.com/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://gudinocustom.com/es"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://gudinocustom.com/"/>
   </url>
   <url>
     <loc>https://gudinocustom.com/portfolio</loc>
-    <lastmod>2025-07-30T17:00:00.000Z</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://gudinocustom.com/portfolio"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://gudinocustom.com/es/portfolio"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://gudinocustom.com/portfolio"/>
+  </url>
+  <url>
+    <loc>https://gudinocustom.com/es/portfolio</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://gudinocustom.com/portfolio"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://gudinocustom.com/es/portfolio"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://gudinocustom.com/portfolio"/>
   </url>
   <url>
     <loc>https://gudinocustom.com/design</loc>
-    <lastmod>2025-07-30T17:00:00.000Z</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://gudinocustom.com/design"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://gudinocustom.com/es/design"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://gudinocustom.com/design"/>
+  </url>
+  <url>
+    <loc>https://gudinocustom.com/es/design</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://gudinocustom.com/design"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://gudinocustom.com/es/design"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://gudinocustom.com/design"/>
   </url>
   <url>
     <loc>https://gudinocustom.com/about</loc>
-    <lastmod>2025-07-30T17:00:00.000Z</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://gudinocustom.com/about"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://gudinocustom.com/es/about"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://gudinocustom.com/about"/>
+  </url>
+  <url>
+    <loc>https://gudinocustom.com/es/about</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://gudinocustom.com/about"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://gudinocustom.com/es/about"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://gudinocustom.com/about"/>
   </url>
   <url>
     <loc>https://gudinocustom.com/contact</loc>
-    <lastmod>2025-07-30T17:00:00.000Z</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  
-  <!-- Portfolio Category Pages -->
-  <url>
-    <loc>https://gudinocustom.com/portfolio?category=kitchen</loc>
-    <lastmod>2025-07-29T01:06:08.000Z</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://gudinocustom.com/contact"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://gudinocustom.com/es/contact"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://gudinocustom.com/contact"/>
   </url>
   <url>
-    <loc>https://gudinocustom.com/portfolio?category=bathroom</loc>
-    <lastmod>2025-07-29T01:06:57.000Z</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
+    <loc>https://gudinocustom.com/es/contact</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://gudinocustom.com/contact"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://gudinocustom.com/es/contact"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://gudinocustom.com/contact"/>
   </url>
   <url>
-    <loc>https://gudinocustom.com/portfolio?category=bedroom</loc>
-    <lastmod>2025-07-29T01:07:17.000Z</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
+    <loc>https://gudinocustom.com/faq</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://gudinocustom.com/faq"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://gudinocustom.com/es/faq"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://gudinocustom.com/faq"/>
   </url>
   <url>
-    <loc>https://gudinocustom.com/portfolio?category=livingroom</loc>
-    <lastmod>2025-07-29T01:07:07.000Z</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
+    <loc>https://gudinocustom.com/es/faq</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://gudinocustom.com/faq"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://gudinocustom.com/es/faq"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://gudinocustom.com/faq"/>
   </url>
-  <url>
-    <loc>https://gudinocustom.com/portfolio?category=laundryroom</loc>
-    <lastmod>2025-07-29T01:07:28.000Z</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://gudinocustom.com/portfolio?category=showcase</loc>
-    <lastmod>2025-07-29T01:07:41.000Z</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-
-  <!-- Additional Pages -->
   <url>
     <loc>https://gudinocustom.com/cabinet-care</loc>
-    <lastmod>2025-12-21T00:00:00.000Z</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://gudinocustom.com/cabinet-care"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://gudinocustom.com/es/cabinet-care"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://gudinocustom.com/cabinet-care"/>
+  </url>
+  <url>
+    <loc>https://gudinocustom.com/es/cabinet-care</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://gudinocustom.com/cabinet-care"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://gudinocustom.com/es/cabinet-care"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://gudinocustom.com/cabinet-care"/>
   </url>
   <url>
     <loc>https://gudinocustom.com/why-choose-us</loc>
-    <lastmod>2025-12-21T00:00:00.000Z</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://gudinocustom.com/why-choose-us"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://gudinocustom.com/es/why-choose-us"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://gudinocustom.com/why-choose-us"/>
+  </url>
+  <url>
+    <loc>https://gudinocustom.com/es/why-choose-us</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://gudinocustom.com/why-choose-us"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://gudinocustom.com/es/why-choose-us"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://gudinocustom.com/why-choose-us"/>
+  </url>
+  <url>
+    <loc>https://gudinocustom.com/hardware-catalog</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://gudinocustom.com/hardware-catalog"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://gudinocustom.com/es/hardware-catalog"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://gudinocustom.com/hardware-catalog"/>
+  </url>
+  <url>
+    <loc>https://gudinocustom.com/es/hardware-catalog</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://gudinocustom.com/hardware-catalog"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://gudinocustom.com/es/hardware-catalog"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://gudinocustom.com/hardware-catalog"/>
+  </url>
+  <url>
+    <loc>https://gudinocustom.com/book-appointment</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://gudinocustom.com/book-appointment"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://gudinocustom.com/es/book-appointment"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://gudinocustom.com/book-appointment"/>
+  </url>
+  <url>
+    <loc>https://gudinocustom.com/es/book-appointment</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://gudinocustom.com/book-appointment"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://gudinocustom.com/es/book-appointment"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://gudinocustom.com/book-appointment"/>
+  </url>
+  <url>
+    <loc>https://gudinocustom.com/quick-quote</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://gudinocustom.com/quick-quote"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://gudinocustom.com/es/quick-quote"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://gudinocustom.com/quick-quote"/>
+  </url>
+  <url>
+    <loc>https://gudinocustom.com/es/quick-quote</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://gudinocustom.com/quick-quote"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://gudinocustom.com/es/quick-quote"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://gudinocustom.com/quick-quote"/>
   </url>
   <url>
     <loc>https://gudinocustom.com/privacy</loc>
-    <lastmod>2025-12-21T00:00:00.000Z</lastmod>
-    <changefreq>yearly</changefreq>
-    <priority>0.3</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://gudinocustom.com/privacy"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://gudinocustom.com/es/privacy"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://gudinocustom.com/privacy"/>
+  </url>
+  <url>
+    <loc>https://gudinocustom.com/es/privacy</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://gudinocustom.com/privacy"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://gudinocustom.com/es/privacy"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://gudinocustom.com/privacy"/>
+  </url>
+  <url>
+    <loc>https://gudinocustom.com/sms-consent-verification</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://gudinocustom.com/sms-consent-verification"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://gudinocustom.com/es/sms-consent-verification"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://gudinocustom.com/sms-consent-verification"/>
+  </url>
+  <url>
+    <loc>https://gudinocustom.com/es/sms-consent-verification</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://gudinocustom.com/sms-consent-verification"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://gudinocustom.com/es/sms-consent-verification"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://gudinocustom.com/sms-consent-verification"/>
   </url>
   <url>
     <loc>https://gudinocustom.com/sms-terms</loc>
-    <lastmod>2025-12-21T00:00:00.000Z</lastmod>
-    <changefreq>yearly</changefreq>
-    <priority>0.3</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://gudinocustom.com/sms-terms"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://gudinocustom.com/es/sms-terms"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://gudinocustom.com/sms-terms"/>
+  </url>
+  <url>
+    <loc>https://gudinocustom.com/es/sms-terms</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://gudinocustom.com/sms-terms"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://gudinocustom.com/es/sms-terms"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://gudinocustom.com/sms-terms"/>
+  </url>
+  <url>
+    <loc>https://gudinocustom.com/sms-privacy</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://gudinocustom.com/sms-privacy"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://gudinocustom.com/es/sms-privacy"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://gudinocustom.com/sms-privacy"/>
+  </url>
+  <url>
+    <loc>https://gudinocustom.com/es/sms-privacy</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://gudinocustom.com/sms-privacy"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://gudinocustom.com/es/sms-privacy"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://gudinocustom.com/sms-privacy"/>
   </url>
 </urlset>

@@ -7,7 +7,7 @@ const fs = require("fs").promises;
 const rateLimit = require("express-rate-limit");
 const {getDb,designDb} = require("../db-helpers");
 const {authenticateUser, requireRole } = require("../middleware/auth");
-const {uploadMemory } = require("../middleware/upload");
+const { designUpload } = require("../middleware/design-upload");
 const { emailTransporter } = require("../utils/email");
 const { sendSmsWithRouting } = require("../utils/sms");
 const { handleError } = require("../utils/error-handler");
@@ -33,7 +33,7 @@ router.get("/", authenticateUser, requireRole(['admin', 'super_admin']), async (
   }
 });
 // Send email notification
-router.post("/", designSubmitLimiter, uploadMemory.single("pdf"), async (req, res) => {
+router.post("/", designSubmitLimiter, designUpload("pdf"), async (req, res) => {
   try {
     console.log("\n=== NEW DESIGN SUBMISSION ===");
     // Parse design data from form data

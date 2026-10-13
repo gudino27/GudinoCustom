@@ -16,7 +16,7 @@ const VARIANTS = {
 };
 
 export default function ErrorPage({ variant = 'notFound', detail = null }) {
-  const { t } = useLanguage();
+  const { t, localizedPath: lp } = useLanguage();
   const navigate = useNavigate();
   const cfg = VARIANTS[variant] || VARIANTS.notFound;
   const k = cfg.key;
@@ -42,7 +42,7 @@ export default function ErrorPage({ variant = 'notFound', detail = null }) {
 
           <div className="error-page__actions">
             {cfg.showHome ? (
-              <Link to="/" className="error-page__button error-page__button--primary">
+              <Link to={lp("/")} className="error-page__button error-page__button--primary">
                 {t('error.action.home')}
               </Link>
             ) : null}
@@ -57,7 +57,7 @@ export default function ErrorPage({ variant = 'notFound', detail = null }) {
               </button>
             ) : null}
             {cfg.showContact ? (
-              <Link to="/contact" className="error-page__button">
+              <Link to={lp("/contact")} className="error-page__button">
                 {t('error.action.contact')}
               </Link>
             ) : null}
@@ -65,7 +65,7 @@ export default function ErrorPage({ variant = 'notFound', detail = null }) {
 
           <p className="error-page__help">
             {t('error.help')}{' '}
-            <Link to="/contact">{t('error.helpLink')}</Link>
+            <Link to={lp("/contact")}>{t('error.helpLink')}</Link>
           </p>
         </div>
       </main>

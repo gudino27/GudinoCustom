@@ -12,7 +12,7 @@ const WhyChooseUs = () => {
     <>
       <SEO
         title={t('whyChooseUs.title')}
-        description="Discover why homeowners choose Gudino Custom for their kitchen and bathroom projects. Expert craftsmanship, quality materials, professional installation, and exceptional customer service."
+        description={t('seo.whyChooseUs.description')}
         keywords="why choose us, custom woodworking benefits, quality cabinets, professional installation, expert craftsmanship, Washington cabinet maker"
         canonical="https://gudinocustom.com/why-choose-us"
       />

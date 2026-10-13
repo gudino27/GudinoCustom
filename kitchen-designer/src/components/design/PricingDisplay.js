@@ -1,5 +1,6 @@
 import React from 'react';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { formatPrice, wallCharges } from '../../utils/designer/pricing';
 
 const PricingDisplay = ({
   isVisible,
@@ -19,26 +20,29 @@ const PricingDisplay = ({
     (el) => el.category === "cabinet"
   );
 
-  // Compute base cabinet-only price (ignore color and wall mods)
-  const baseCabinetPrice = hasCabinets
-    ? calculateTotalPrice({
-        ...currentRoomData,
-        removedWalls: [],
-        walls: currentRoomData.originalWalls || [1, 2, 3, 4],
-        colorCount: 1,
-      })
-    : 0;
+  // Price of some of the items alone (no color, wall or pantry charges), from
+  // the same calculateTotalPrice as the total and the quote
+  const itemsPrice = (elements) =>
+    calculateTotalPrice({
+      ...currentRoomData,
+      elements,
+      removedWalls: [],
+      walls: originalWalls,
+      doors: [],
+      colorCount: null,
+    });
+  const elements = currentRoomData.elements || [];
+  const baseCabinetPrice = hasCabinets ? itemsPrice(elements.filter((el) => el.category === "cabinet")) : 0;
+  // Appliances / fixtures the shop chose to price (0 = not in the estimate)
+  const appliancePrice = itemsPrice(elements.filter((el) => el.category !== "cabinet"));
 
-  // Color upcharge only applies when cabinets exist
-  const colorCharge = hasCabinets ? (colorPricing[currentRoomData.colorCount] || 0) : 0;
+  // Wall modifications and pantries (always shown if > 0)
+  const walls = wallCharges({ ...currentRoomData, originalWalls }, wallPricing);
+  const totalWallCost = walls.removed.cost + walls.added.cost;
 
-  // Compute wall modification costs (always shown if > 0)
-  const removedWalls = currentRoomData.removedWalls || [];
-  const chargeableRemoved = removedWalls.filter((wall) => originalWalls.includes(wall));
-  const customAdded = (currentRoomData.walls || []).filter((wall) => !originalWalls.includes(wall));
-  const totalWallCost = (chargeableRemoved.length * wallPricing.removeWall) + (customAdded.length * wallPricing.addWall);
-
-  const totalEstimate = Math.max(0, baseCabinetPrice + colorCharge + totalWallCost);
+  // The same total as the quote: cabinets, priced appliances, the color
+  // upcharge (only with cabinets), walls and pantries
+  const totalEstimate = Math.max(0, calculateTotalPrice(currentRoomData));
 
   return (
     <div className="mb-6 p-4 bg-blue-50 rounded-lg">
@@ -50,8 +54,15 @@ const PricingDisplay = ({
         {/* Base cabinet pricing */}
         <div className="flex justify-between">
           <span>{t('designer.baseCabinetPrice')}:</span>
-          <span>${baseCabinetPrice.toFixed(2)}</span>
+          <span>{formatPrice(baseCabinetPrice)}</span>
         </div>
+
+        {appliancePrice > 0 && (
+          <div className="flex justify-between">
+            <span>{t('pricing.appliances')}:</span>
+            <span>{formatPrice(appliancePrice)}</span>
+          </div>
+        )}
 
         {/* Color options selector */}
         <div className="flex justify-between">
@@ -77,14 +88,22 @@ const PricingDisplay = ({
         {totalWallCost > 0 && (
           <div className="flex justify-between">
             <span>{t('pricing.walls')}:</span>
-            <span>${totalWallCost.toFixed(2)}</span>
+            <span>{formatPrice(totalWallCost)}</span>
+          </div>
+        )}
+
+        {/* Pantry partition walls and cased openings */}
+        {walls.pantries > 0 && (
+          <div className="flex justify-between">
+            <span>{t('pricing.pantries')}:</span>
+            <span>{formatPrice(walls.pantries)}</span>
           </div>
         )}
 
         {/* Total price display */}
         <div className="border-t pt-2 font-semibold flex justify-between">
           <span>{t('designer.totalEstimate')}:</span>
-          <span>${totalEstimate.toFixed(2)}</span>
+          <span>{formatPrice(totalEstimate)}</span>
         </div>
 
         {/* Pricing disclaimer */}

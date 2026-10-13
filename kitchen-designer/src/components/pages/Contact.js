@@ -3,7 +3,9 @@ import Navigation from '../ui/Navigation';
 import Footer from '../ui/Footer';
 import SEO from '../ui/SEO';
 import { announce } from '../ui/LiveRegion';
+import { Link } from 'react-router-dom';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { BUSINESS, formatAddress } from '../../seo/site';
 import '../css/contact.css';
 import { useAnalytics } from '../../hooks/useAnalytics';
 
@@ -12,7 +14,7 @@ const Contact = () => {
   useAnalytics('/contact');
 
   // Language context
-  const { t } = useLanguage();
+  const { t, localizedPath: lp } = useLanguage();
 
   const [isMapLoaded, setIsMapLoaded] = useState(false);
   const [hoveredCard, setHoveredCard] = useState(null);
@@ -25,15 +27,17 @@ const Contact = () => {
     return () => clearTimeout(timer);
   }, []);
 
+  // phone, email and address live in src/seo/site.js, which also feeds the
+  // structured data and llms.txt, so the numbers cannot drift apart
   const contactInfo = {
     phone: {
-      english: "(509) 515-4090",
-      englishTel: "+15095154090",
-      spanish: "(509) 831-9816",
-      spanishTel: "+15098319816"
+      english: BUSINESS.phones.english.display,
+      englishTel: BUSINESS.phones.english.tel,
+      spanish: BUSINESS.phones.spanish.display,
+      spanishTel: BUSINESS.phones.spanish.tel
     },
-    email: "Info@gudinocustom.com",
-    address: "70 Ray Rd, Sunnyside, WA 98944",
+    email: BUSINESS.email,
+    address: formatAddress(),
     hours: {
       weekdays: t('contact.hours.weekdays'),
       saturday: t('contact.hours.saturday'),
@@ -87,7 +91,7 @@ const Contact = () => {
     <>
       <SEO
         title={t('seo.contact.title')}
-        description="Contact Gudino Custom for a free consultation and quote on your kitchen remodeling, bathroom renovation, or custom cabinet project in Washington. Call or email us today."
+        description={t('seo.contact.description')}
         keywords="contact carpenter, free quote, consultation, kitchen remodel estimate, cabinet installation quote, Washington contractor"
         canonical="https://gudinocustom.com/contact"
       />
@@ -100,6 +104,13 @@ const Contact = () => {
             <h1 className="hero-title">{t('contact.heroTitle')}</h1>
             <p className="hero-subtitle">
               {t('contact.heroSubtitle')}
+            </p>
+            {/* white on the hero's darkest-light end (rgb 110) is 5.1:1 */}
+            <p className="hero-subtitle">
+              {t('contact.faqPrompt')}{' '}
+              <Link to={lp('/faq')} style={{ color: '#ffffff', textDecoration: 'underline' }}>
+                {t('contact.faqLink')}
+              </Link>
             </p>
           </div>
         </div>

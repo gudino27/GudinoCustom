@@ -141,6 +141,24 @@ export const elementTypes = {
     room: 'kitchen',
     isPantry: true            // Special rendering flag
   },
+  'refrigerator-cabinet': {
+    name: 'Refrigerator Cabinet',
+    defaultWidth: 41,         // 36" fridge opening + a 2.5" side panel either side
+    defaultDepth: 26,         // the engine's fridge surround depth
+    minHeight: 76,
+    defaultHeight: 84,        // Full height like the tall and pantry cabinets
+    color: '#d3d3d3',
+    category: 'cabinet',
+    zIndex: 0,                // Drawn under the refrigerator it houses
+    room: 'kitchen',
+    houses: ['refrigerator'], // Appliances that may stand inside it (utils/designer/housing.js)
+    housing: {
+      sidePanel: 2.5,         // Side panel either side of the opening
+      topHeight: 12,          // Cabinet over the opening; the opening is the rest
+      openFront: true         // The fridge may stand proud of the cabinet front
+    },
+    openingWidths: [30, 33, 36, 42, 48] // Fridge sizes offered in the properties panel
+  },
   'corner-wall': {
     name: 'Corner Wall Cabinet',
     defaultWidth: 24,

@@ -1,3 +1,4 @@
+import { isQuarterTurned } from './designer/rotation';
 // Design utility functions for cabinet placement, snapping, and collision detection
 // Contains helper functions for canvas interactions and element positioning
 
@@ -138,8 +139,8 @@ export const snapToCabinet = (x, y, width, depth, excludeId, rotation, currentRo
       const elX = element.x;
       const elY = element.y;
       // Calculate element dimensions based on rotation
-      const elWidth = element.rotation % 180 === 0 ? element.width * scale : element.depth * scale;
-      const elHeight = element.rotation % 180 === 0 ? element.depth * scale : element.width * scale;
+      const elWidth = !isQuarterTurned(element.rotation) ? element.width * scale : element.depth * scale;
+      const elHeight = !isQuarterTurned(element.rotation) ? element.depth * scale : element.width * scale;
 
       // Snap to right edge (left side of this cabinet)
       if (Math.abs(x - (elX + elWidth)) <= snapDistance && Math.abs(y - elY) <= snapDistance) {
@@ -262,8 +263,8 @@ export const checkElementCollision = (elementX, elementY, elementWidth, elementH
     }
 
     // Calculate other element's dimensions based on rotation
-    const otherWidth = otherElement.rotation % 180 === 0 ? otherElement.width * scale : otherElement.depth * scale;
-    const otherDepth = otherElement.rotation % 180 === 0 ? otherElement.depth * scale : otherElement.width * scale;
+    const otherWidth = !isQuarterTurned(otherElement.rotation) ? otherElement.width * scale : otherElement.depth * scale;
+    const otherDepth = !isQuarterTurned(otherElement.rotation) ? otherElement.depth * scale : otherElement.width * scale;
 
     // AABB collision detection with overlap buffer
     const collision = !(

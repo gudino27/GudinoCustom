@@ -1154,6 +1154,44 @@ def build_island(M):
     tag_from(faucet(M), False, s, "appliance")
 
 
+def dump_parts(path):
+    """Write every part, before joining or bevelling, as JSON: the ground truth
+    the JavaScript engine (src/engine) is checked against, part by part.
+    Coordinates are plan inches (x east, y south, z up)."""
+    import json
+    out = []
+    for o in ALL_OBJS:
+        me = o.data
+        co = [v.co for v in me.vertices]
+        bm = bmesh.new()
+        bm.from_mesh(me)
+        volume = abs(bm.calc_volume()) / (IN ** 3)
+        area = sum(f.calc_area() for f in bm.faces) / (IN ** 2)
+        bm.free()
+        name = o.name
+        base = name.rsplit(".", 1)[0] if name[-4:-3] == "." and name[-3:].isdigit() else name
+        out.append({
+            "name": name,
+            "base": base,
+            "material": me.materials[0].name if me.materials else "",
+            "static": int(o.get("build_static", 0)),
+            "order": int(o.get("build_order", 0)),
+            "group": o.get("build_group", "room"),
+            "zone": o.get("build_zone", "room"),
+            "min": [round(min(c[i] for c in co) / IN, 4) for i in range(3)],
+            "max": [round(max(c[i] for c in co) / IN, 4) for i in range(3)],
+            "verts": len(me.vertices),
+            "faces": len(me.polygons),
+            "volume": round(volume, 3),
+            "area": round(area, 3),
+        })
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as fh:
+        json.dump({"units": "in", "axes": "x east, y south, z up", "steps": order(), "parts": out}, fh, indent=1)
+    print("[kitchen] dumped %d parts to %s" % (len(out), path))
+
+
+
 # ---------------------------------------------------------------------------
 # plan space (Y=south) -> Blender (Y=north), keeping normals outward
 # ---------------------------------------------------------------------------
@@ -1333,6 +1371,12 @@ def main():
     build_island(M)
 
     print("[kitchen] boxes: %d   build steps: %d" % (len(ALL_OBJS), order()))
+
+    # KITCHEN_PARTS_JSON=<file>: dump the parts for the engine's tests and stop,
+    # leaving the published GLB untouched
+    if os.environ.get("KITCHEN_PARTS_JSON"):
+        dump_parts(os.environ["KITCHEN_PARTS_JSON"])
+        return
     parts = join_parts()
     bevel_parts(parts)
     mirror_y()

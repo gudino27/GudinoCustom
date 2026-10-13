@@ -13,6 +13,7 @@ const {
   generateQuickQuoteAdminNotification,
 } = require("../utils/email");
 const { sendSmsWithRouting } = require("../utils/sms");
+const { buildRobotsTxt, buildSitemapXml } = require("../utils/crawl-policy");
 const { notifyQuickQuoteSubmitted } = require("../utils/push-notifications");
 const PORT = process.env.PORT || 3001;
 
@@ -357,200 +358,40 @@ router.get("/api/health", async (req, res) => {
   }
 });
 // Dynamic sitemap generation
+// The URL list, hreflang alternates and robots.txt text come from
+// utils/crawl-policy.js, an exact copy of kitchen-designer/scripts/seo/crawl-policy.js,
+// so this sitemap lists the same pages the frontend prerenders (English and /es/).
+// lastmod is only given where the database knows when the content changed:
+// the portfolio (latest photo) and About (latest visible testimonial).
+const latestDate = (rows, field) => {
+  const times = rows
+    .map((row) => new Date(row[field]).getTime())
+    .filter((time) => Number.isFinite(time));
+  return times.length ? new Date(Math.max(...times)).toISOString() : null;
+};
+
 router.get("/sitemap.xml", async (req, res) => {
   try {
-    const baseUrl = "https://gudinocustom.com";
-    const currentDate = new Date().toISOString();
-
-    // Get all photos to extract categories and recent updates
+    const lastmod = {};
     const photos = await photoDb.getAllPhotos();
-    const categories = [...new Set(photos.map((photo) => photo.category))];
-    const latestPhotoDate =
-      photos.length > 0
-        ? new Date(
-            Math.max(...photos.map((photo) => new Date(photo.uploaded_at)))
-          ).toISOString()
-        : currentDate;
+    const latestPhoto = latestDate(photos, "uploaded_at");
+    if (latestPhoto) lastmod["/portfolio"] = latestPhoto;
 
-    // Get testimonials for last modified date
     const testimonials = await testimonialDb.getAllTestimonials(true);
-    const latestTestimonialDate =
-      testimonials.length > 0
-        ? new Date(
-            Math.max(...testimonials.map((t) => new Date(t.created_at)))
-          ).toISOString()
-        : currentDate;
-
-    const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <!-- Main Pages -->
-  <url>
-    <loc>${baseUrl}/</loc>
-    <lastmod>${currentDate}</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>1.0</priority>
-  </url>
-  <url>
-    <loc>${baseUrl}/portfolio</loc>
-    <lastmod>${latestPhotoDate}</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>${baseUrl}/design</loc>
-    <lastmod>${currentDate}</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>${baseUrl}/about</loc>
-    <lastmod>${currentDate}</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>${baseUrl}/contact</loc>
-    <lastmod>${currentDate}</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  
-  <!-- Portfolio Category Pages -->
-${categories
-  .map((category) => {
-    const categoryPhotos = photos.filter((p) => p.category === category);
-    const latestCategoryUpdate =
-      categoryPhotos.length > 0
-        ? new Date(
-            Math.max(...categoryPhotos.map((p) => new Date(p.uploaded_at)))
-          ).toISOString()
-        : currentDate;
-
-    return `  <url>
-    <loc>${baseUrl}/portfolio?category=${encodeURIComponent(category)}</loc>
-    <lastmod>${latestCategoryUpdate}</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>`;
-  })
-  .join("\n")}
-
-  <!-- Services Pages (inferred from categories) -->
-  <url>
-    <loc>${baseUrl}/services/kitchen-cabinets</loc>
-    <lastmod>${currentDate}</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>${baseUrl}/services/bathroom-vanities</loc>
-    <lastmod>${currentDate}</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>${baseUrl}/services/custom-woodworking</loc>
-    <lastmod>${currentDate}</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>${baseUrl}/services/cabinet-design</loc>
-    <lastmod>${currentDate}</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.7</priority>
-  </url>
-
-  <!-- Testimonials Page -->
-  <url>
-    <loc>${baseUrl}/testimonials</loc>
-    <lastmod>${latestTestimonialDate}</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-
-  <!-- FAQ and Info Pages -->
-  <url>
-    <loc>${baseUrl}/faq</loc>
-    <lastmod>${currentDate}</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.5</priority>
-  </url>
-  <url>
-    <loc>${baseUrl}/process</loc>
-    <lastmod>${currentDate}</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
-  </url>
-</urlset>`;
+    const latestTestimonial = latestDate(testimonials, "created_at");
+    if (latestTestimonial) lastmod["/about"] = latestTestimonial;
 
     res.set("Content-Type", "application/xml");
-    res.send(sitemap);
+    res.send(buildSitemapXml(lastmod));
   } catch (error) {
     console.error("Sitemap generation error:", error);
     res.status(500).json({ error: "Failed to generate sitemap" });
   }
 });
-// Robots.txt for SEO
+// Robots.txt for SEO (same text as the frontend's build/robots.txt)
 router.get("/robots.txt", (req, res) => {
-  const robotsTxt = `# As a condition of accessing this website, you agree to abide by the following
-# content signals:
-
-# (a)  If a content-Signal = yes, you may collect content for the corresponding
-#      use.
-# (b)  If a content-Signal = no, you may not collect content for the
-#      corresponding use.
-# (c)  If the website operator does not include a content signal for a
-#      corresponding use, the website operator neither grants nor restricts
-#      permission via content signal with respect to the corresponding use.
-# The content signals and their meanings are:
-# search:   building a search index and providing search results (e.g., returning
-#           hyperlinks and short excerpts from your website's contents). Search does not
-#           include providing AI-generated search summaries.
-# ai-input: inputting content into one or more AI models (e.g., retrieval
-#           augmented generation, grounding, or other real-time taking of content for
-#           generative AI search answers).
-# ai-train: training or fine-tuning AI models.
-# ANY RESTRICTIONS EXPRESSED VIA CONTENT SIGNALS ARE EXPRESS RESERVATIONS OF
-# RIGHTS UNDER ARTICLE 4 OF THE EUROPEAN UNION DIRECTIVE 2019/790 ON COPYRIGHT
-# AND RELATED RIGHTS IN THE DIGITAL SINGLE MARKET.
-# BEGIN Cloudflare Managed content
-# User-Agent: *
-# Content-Signal: search=yes,ai-train=no
-# Allow: /
-User-agent: Amazonbot
-Disallow: /
-User-agent: Applebot-Extended
-Disallow: /
-User-agent: Bytespider
-Disallow: /
-User-agent: CCBot
-Disallow: /
-User-agent: ClaudeBot
-Disallow: /
-User-agent: Google-Extended
-Disallow: /
-User-agent: GPTBot
-Disallow: /
-User-agent: meta-externalagent
-Disallow: /
-# END Cloudflare Managed Content
-User-agent: *
-Allow: /
-# Sitemap
-Sitemap: https://gudinocustom.com/sitemap.xml
-# Disallow admin and private areas
-Disallow: /admin
-Disallow: /api/
-Disallow: /reset-password
-# Allow specific API endpoints that should be crawled
-Allow: /api/photos
-Allow: /api/testimonials
-# Crawl delay (optional)
-Crawl-delay: 1`;
-
-  res.set("Content-Type", "text/plain");
-  res.send(robotsTxt);
+  res.set("Content-Type", "text/plain; charset=utf-8");
+  res.send(buildRobotsTxt());
 });
 // List uploads directory (for debugging)
 router.get("/api/debug/uploads", async (req, res) => {

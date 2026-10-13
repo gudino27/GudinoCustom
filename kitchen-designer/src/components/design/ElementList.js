@@ -1,6 +1,7 @@
 import React from 'react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { getElementName } from './elementName';
+import { formatInches, pxToInches } from '../../utils/designer/planUnits';
 
 const ElementList = ({
   currentRoomData,
@@ -16,7 +17,7 @@ const ElementList = ({
     return null;
   }
 
-  const toInches = (px) => Math.round((px / scale) * 10) / 10;
+  const toInches = (px) => formatInches(pxToInches(px, scale));
 
   return (
     <div className="mt-6 border-t pt-4">
@@ -38,8 +39,8 @@ const ElementList = ({
               <span>{getElementName(t, element.type, elementTypes)}</span>
               {/* Element dimensions */}
               <span className="text-gray-600">
-                {element.width}" × {element.depth}"d
-                {element.actualHeight && ` × ${element.actualHeight}"h`}
+                {formatInches(element.width)} × {formatInches(element.depth)}d
+                {element.actualHeight ? ` × ${formatInches(element.actualHeight)}h` : null}
               </span>
               {/* Element position */}
               <span className="text-gray-600">

@@ -1,4 +1,14 @@
 import { useState, useEffect } from 'react';
+import {
+  DEFAULT_BASE_PRICES,
+  DEFAULT_COLOR_PRICING,
+  DEFAULT_WALL_PRICING,
+  calculateRoomPrice,
+  normalizeMaterialMultipliers,
+  resolveMaterialMultipliers,
+  resolveWallPricing,
+  withDefaults,
+} from '../../utils/designer/pricing';
 export const usePricing = ({
   sharedMaterialMultipliers,
   setSharedMaterialMultipliers,
@@ -8,68 +18,19 @@ export const usePricing = ({
     process.env.REACT_APP_API_URL || "https://api.gudinocustom.com";
 
   // Base prices for each cabinet/appliance type
-  const [basePrices, setBasePrices] = useState({
-    // Kitchen Cabinets
-    base: 250,
-    "sink-base": 320,
-    wall: 180,
-    tall: 450,
-    corner: 380,
-    "drawer-base": 280,
-    "double-drawer-base": 350,
-    "glass-wall": 220,
-    "open-shelf": 160,
-    "island-base": 580,
-    "peninsula-base": 420,
-    pantry: 520,
-    "corner-wall": 210,
-    // Bathroom Cabinets
-    vanity: 280,
-    "vanity-sink": 350,
-    "double-vanity": 650,
-    "floating-vanity": 420,
-    "corner-vanity": 380,
-    "vanity-tower": 320,
-    medicine: 120,
-    "medicine-mirror": 180,
-    linen: 350,
-    "linen-tower": 420,
-    // Kitchen Appliances
-    refrigerator: 0, // Pricing handled separately for appliances
-    stove: 0,
-    dishwasher: 0,
-    microwave: 0,
-    "wine-cooler": 0,
-    "range-hood": 0,
-    "double-oven": 0,
-    // Bathroom Fixtures
-    toilet: 0,
-    bathtub: 0,
-    shower: 0,
-  });
+  const [basePrices, setBasePrices] = useState(DEFAULT_BASE_PRICES);
 
-  // Material cost multipliers
-  const [materialMultipliers, setMaterialMultipliers] = useState(
-    sharedMaterialMultipliers || {
-      laminate: 1.0, // Standard pricing (no multiplier)
-      wood: 1.5, // 50% upcharge for solid wood
-      plywood: 1.3, // 30% upcharge for plywood
-    }
+  // Material cost multipliers. The shared context starts as {}, which is
+  // truthy, so check for entries rather than using `shared || defaults`.
+  const [materialMultipliers, setMaterialMultipliers] = useState(() =>
+    resolveMaterialMultipliers(sharedMaterialMultipliers)
   );
 
   // Color pricing
-  const [colorPricing, setColorPricing] = useState({
-    1: 0, // Single color included
-    2: 100, // Two colors add $100
-    3: 200, // Three colors add $200
-    custom: 500, // Custom colors add $500
-  });
+  const [colorPricing, setColorPricing] = useState(DEFAULT_COLOR_PRICING);
 
   // Wall modification pricing (set by admin)
-  const [wallPricing, setWallPricing] = useState({
-    addWall: 1500, // Cost to add a wall opening
-    removeWall: 2000, // Cost to remove/modify a wall
-  });
+  const [wallPricing, setWallPricing] = useState(DEFAULT_WALL_PRICING);
 
   // Wall service availability (controlled by admin)
   const [wallAvailability, setWallAvailability] = useState({
@@ -87,25 +48,22 @@ export const usePricing = ({
 
       if (pricesResponse.ok) {
         const data = await pricesResponse.json();
-        setBasePrices(data.basePrices);
+        // Missing or partial tables fall back to the defaults, not undefined
+        // (a type the API does not know yet, e.g. refrigerator-cabinet, keeps
+        // its default price)
+        setBasePrices(withDefaults(DEFAULT_BASE_PRICES, data.basePrices));
 
         // Convert new bilingual array format to old object format for backward compatibility
-        const materialObject = {};
-        if (Array.isArray(data.materialMultipliers)) {
-          data.materialMultipliers.forEach((material) => {
-            materialObject[material.nameEn.toLowerCase()] = material.multiplier;
-          });
-        } else {
-          // Fallback to old format if still object
-          Object.assign(materialObject, data.materialMultipliers);
+        const materialObject = normalizeMaterialMultipliers(data.materialMultipliers);
+        if (Object.keys(materialObject).length > 0) {
+          setMaterialMultipliers(materialObject);
+          setSharedMaterialMultipliers(materialObject); // Update shared context
         }
-
-        setMaterialMultipliers(materialObject);
-        setSharedMaterialMultipliers(materialObject); // Update shared context
-        setColorPricing(data.colorPricing);
+        setColorPricing(withDefaults(DEFAULT_COLOR_PRICING, data.colorPricing));
 
         if (data.wallPricing) {
-          setWallPricing(data.wallPricing);
+          // pantryWall / casedOpening; an older table prices pantry walls as addWall
+          setWallPricing(resolveWallPricing(data.wallPricing));
         }
       } else {
         console.error("Failed to load prices, using defaults");
@@ -124,47 +82,13 @@ export const usePricing = ({
       setPricesLoading(false);
     }
   };
-  const calculateTotalPrice = (roomData = null) => {
-    const data = roomData || currentRoomData;
-    let total = 0;
-
-    const cabinets = data.elements.filter((el) => el.category === "cabinet");
-    cabinets.forEach((cabinet) => {
-      const basePrice = basePrices[cabinet.type] || 250; // Get base price for cabinet type
-      const material = data.materials[cabinet.id] || "laminate"; // Get material choice
-      const materialMultiplier = materialMultipliers[material]; // Get material cost multiplier
-
-      // Calculate size multiplier based on width (24" is standard)
-      const sizeMultiplier = cabinet.width / 24;
-      total += basePrice * materialMultiplier * sizeMultiplier;
+  const calculateTotalPrice = (roomData = null) =>
+    calculateRoomPrice(roomData || currentRoomData, {
+      basePrices,
+      materialMultipliers,
+      colorPricing,
+      wallPricing,
     });
-
-    // Add color upcharge based on number of colors selected
-    total += colorPricing[data.colorCount] || 0;
-
-    // Add wall modification costs
-    const removedWalls = data.removedWalls || [];
-    const dataOriginalWalls = data.originalWalls || [1, 2, 3, 4];
-
-    // Only charge for removing walls that were originally present or were custom-added and saved
-    const chargeableRemovedWalls = removedWalls.filter((wall) =>
-      dataOriginalWalls.includes(wall)
-    );
-    if (chargeableRemovedWalls.length > 0) {
-      total += chargeableRemovedWalls.length * wallPricing.removeWall;
-    }
-
-    // Add cost for custom walls that were added (walls beyond the original 4)
-    const currentWalls = data.walls || [1, 2, 3, 4];
-    const customAddedWalls = currentWalls.filter(
-      (wall) => !dataOriginalWalls.includes(wall)
-    );
-    if (customAddedWalls.length > 0) {
-      total += customAddedWalls.length * wallPricing.addWall;
-    }
-
-    return total;
-  };
 
   // Load prices on component mount
   useEffect(() => {
@@ -179,14 +103,8 @@ export const usePricing = ({
       Object.keys(sharedMaterialMultipliers).length > 0
     ) {
       // Convert new bilingual array format to old object format if needed
-      let materialObject = {};
-      if (Array.isArray(sharedMaterialMultipliers)) {
-        sharedMaterialMultipliers.forEach((material) => {
-          materialObject[material.nameEn.toLowerCase()] = material.multiplier;
-        });
-      } else {
-        materialObject = sharedMaterialMultipliers;
-      }
+      const materialObject = normalizeMaterialMultipliers(sharedMaterialMultipliers);
+      if (Object.keys(materialObject).length === 0) return;
       setMaterialMultipliers(materialObject);
     }
   }, [sharedMaterialMultipliers]);

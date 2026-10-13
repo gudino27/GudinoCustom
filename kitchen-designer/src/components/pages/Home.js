@@ -28,7 +28,7 @@ const Home = () => {
   useAnalytics('/');
 
   // Language context
-  const { t } = useLanguage();
+  const { t, localizedPath: lp } = useLanguage();
   const prefersReducedMotion = usePrefersReducedMotion();
 
   const [isMobile, setIsMobile] = useState(false);
@@ -303,7 +303,7 @@ const Home = () => {
               {t('home.scopeDescription')}
             </div>
             <div className="feature-button">
-              <Link to="/contact" className="cta-button">{t('home.contactUs')}</Link>
+              <Link to={lp("/contact")} className="cta-button">{t('home.contactUs')}</Link>
             </div>
           </div>
         </section>
@@ -368,7 +368,7 @@ const Home = () => {
             </div>
 
             <div className="feature-button">
-              <Link to="/portfolio" className="cta-button">{t('home.viewPortfolio')}</Link>
+              <Link to={lp("/portfolio")} className="cta-button">{t('home.viewPortfolio')}</Link>
             </div>
           </div>
         </section>
@@ -395,7 +395,7 @@ const Home = () => {
               {t('home.designDescription')}
             </div>
             <div className="feature-button">
-              <Link to="/design" className="cta-button">{t('home.useDesigner')}</Link>
+              <Link to={lp("/design")} className="cta-button">{t('home.useDesigner')}</Link>
             </div>
           </div>
         </section>
@@ -410,7 +410,7 @@ const Home = () => {
               {t('home.knowMoreDescription')}
             </div>
             <div className="feature-button">
-              <Link to="/about" className="cta-button">{t('home.aboutUs')}</Link>
+              <Link to={lp("/about")} className="cta-button">{t('home.aboutUs')}</Link>
             </div>
           </div>
         </section>

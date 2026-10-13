@@ -6,6 +6,8 @@ import { LanguageProvider, useLanguage } from './contexts/LanguageContext';
 import { PricingProvider } from './contexts/PricingContext';
 import ErrorBoundary from './components/ui/ErrorBoundary';
 import LiveRegion from './components/ui/LiveRegion';
+import UrlLanguageSync from './components/ui/UrlLanguageSync';
+import { splitLanguagePath } from './seo/site';
 
 // Lazy load all route components for better performance
 const Home = lazy(() => import('./components/pages/Home'));
@@ -26,6 +28,7 @@ const PrivacySettings = lazy(() => import('./components/PrivacySettings'));
 const CabinetCare = lazy(() => import('./components/pages/CabinetCare'));
 const HardwareCatalog = lazy(() => import('./components/pages/HardwareCatalog'));
 const WhyChooseUs = lazy(() => import('./components/pages/WhyChooseUs'));
+const FAQ = lazy(() => import('./components/pages/FAQ'));
 const AppointmentBooking = lazy(() => import('./components/pages/AppointmentBooking'));
 const AppointmentCancel = lazy(() => import('./components/pages/AppointmentCancel'));
 const VirtualShowroom = lazy(() => import('./components/showroom/VirtualShowroom'));
@@ -41,7 +44,12 @@ function RouteChangeFocus() {
 
   useEffect(() => {
     if (lastPathname.current === pathname) return undefined; // initial render
+    const languageOnly = splitLanguagePath(lastPathname.current).basePath.toLowerCase()
+      === splitLanguagePath(pathname).basePath.toLowerCase();
     lastPathname.current = pathname;
+    // /about <-> /es/about is the same page in the other language (the
+    // language selector, or a saved Spanish choice): keep focus and scroll
+    if (languageOnly) return undefined;
     window.scrollTo(0, 0);
 
     const focusMain = () => {
@@ -113,41 +121,48 @@ function App() {
         <PricingProvider>
           <Router>
             <RouteChangeFocus />
+            <UrlLanguageSync />
             <RouteErrorBoundary>
           <Suspense fallback={<PageLoading />}>
             <Routes>
 
-              {/* React components */}
-              <Route path="/" element={<Home />} />
-              <Route path="/portfolio" element={<Portfolio />} />
-              <Route path="/design" element={<KitchenDesigner />} />
-              <Route path="/about" element={<About />} />
-              <Route path="/contact" element={<Contact />} />
+              {/* Public pages answer at /page and at /es/page (Spanish). Keep
+                  this list in step with PUBLIC_ROUTES in src/seo/site.js,
+                  which drives prerendering, canonicals, hreflang and the
+                  sitemap. One route per page, so switching language keeps
+                  the page mounted. */}
+              <Route path="/es?" element={<Home />} />
+              <Route path="/es?/portfolio" element={<Portfolio />} />
+              <Route path="/es?/design" element={<KitchenDesigner />} />
+              <Route path="/es?/about" element={<About />} />
+              <Route path="/es?/contact" element={<Contact />} />
               <Route path="/admin" element={<AdminPanel />} />
               <Route path="/reset-password" element={<PasswordReset />} />
               <Route path="/register/:token" element={<Registration />} />
               <Route path="/testimonial/:token" element={<TestimonialForm />} />
-              <Route path="/quick-quote" element={<QuickContactForm />} />
+              <Route path="/es?/quick-quote" element={<QuickContactForm />} />
               <Route path="/invoice/:token/payment/:paymentId" element={<ReceiptViewer />} />
               <Route path="/invoice/:token" element={<InvoiceViewer />} />
               <Route path="/project/:token" element={<ProjectTimeline />} />
-              <Route path="/sms-consent-verification" element={<SmsCompliance defaultTab="consent" />} />
-              <Route path="/sms-terms" element={<SmsCompliance defaultTab="terms" />} />
-              <Route path="/sms-privacy" element={<SmsCompliance defaultTab="privacy" />} />
-              <Route path="/privacy" element={<SmsCompliance defaultTab="website" />} />
+              <Route path="/es?/sms-consent-verification" element={<SmsCompliance defaultTab="consent" />} />
+              <Route path="/es?/sms-terms" element={<SmsCompliance defaultTab="terms" />} />
+              <Route path="/es?/sms-privacy" element={<SmsCompliance defaultTab="privacy" />} />
+              <Route path="/es?/privacy" element={<SmsCompliance defaultTab="website" />} />
               <Route path="/opt-out" element={<PrivacySettings />} />
               <Route path="/privacy-settings" element={<PrivacySettings />} />
-              <Route path="/cabinet-care" element={<CabinetCare />} />
-              <Route path="/hardware-catalog" element={<HardwareCatalog />} />
-              <Route path="/why-choose-us" element={<WhyChooseUs />} />
-              <Route path="/book-appointment" element={<AppointmentBooking />} />
+              <Route path="/es?/cabinet-care" element={<CabinetCare />} />
+              <Route path="/es?/hardware-catalog" element={<HardwareCatalog />} />
+              <Route path="/es?/why-choose-us" element={<WhyChooseUs />} />
+              <Route path="/es?/faq" element={<FAQ />} />
+              <Route path="/es?/book-appointment" element={<AppointmentBooking />} />
               <Route path="/appointment/cancel/:token" element={<AppointmentCancel />} />
               <Route path="/showroom" element={<VirtualShowroom />} />
               <Route path="/instagram-embed" element={<InstagramEmbed />} />
 
               {/* Restricted area, reachable directly or by redirect */}
               <Route path="/no-access" element={<ErrorPage variant="noAccess" />} />
-              {/* Catch-all: nginx already falls back to index.html, so an
+              {/* Catch-all: nginx falls back to the noindex app shell
+                  (app-shell.html, written by scripts/prerender.js), so an
                   unknown path lands here rather than on a CDN 404 page */}
               <Route path="*" element={<ErrorPage variant="notFound" />} />
             </Routes>

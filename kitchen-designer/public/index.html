@@ -5,24 +5,38 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 
-  <!-- Set <html lang> from the saved language before React boots, so screen
-       readers never read the first paint in the wrong language (WCAG 3.1.1).
-       LanguageContext keeps it in step after that. -->
+  <!-- Set <html lang> before React boots, so screen readers never read the
+       first paint in the wrong language (WCAG 3.1.1): a Spanish address
+       (/es, /es/...) is Spanish, anything else follows the saved language.
+       LanguageContext keeps it in step after that.
+       The has-js class hides the prerendered copy of the page (see
+       scripts/prerender.js) while the app loads: visitors see the same
+       loading screen as before, and React replaces that markup when it
+       mounts. Without JavaScript (most crawlers) the copy stays visible. -->
   <script>
     (function () {
+      var root = document.documentElement;
+      root.className += ' has-js';
+      var path = (location.pathname || '/').toLowerCase();
+      if (path === '/es' || path.indexOf('/es/') === 0) {
+        root.lang = 'es';
+        return;
+      }
       var saved = null;
       try { saved = localStorage.getItem('kitchen-designer-language'); } catch (e) { /* storage blocked */ }
       var lang = (saved === 'en' || saved === 'es')
         ? saved
         : ((navigator.language || '').toLowerCase().indexOf('es') === 0 ? 'es' : 'en');
-      document.documentElement.lang = lang;
+      root.lang = lang;
     })();
   </script>
+  <style>
+    .has-js [data-prerendered] { display: none; }
+  </style>
   <meta name="theme-color" content="#1f2937" />
-  <meta name="description"
-    content="Expert carpenters specializing in kitchen remodeling, bathroom renovations, custom cabinet installation, and home remodeling throughout Washington. Professional carpentry services by Gudino Custom Woodworking." />
-  <meta name="keywords"
-    content="carpenter, carpentry, kitchen remodeling, bathroom renovation, custom cabinets, cabinet installation, home remodeling, Washington, custom woodworking, kitchen renovation, bathroom remodel" />
+  <!-- Page titles, descriptions, canonical / hreflang links, Open Graph tags
+       and JSON-LD are written per page by scripts/prerender.js (after the
+       build) and kept up to date by src/components/ui/SEO.js. -->
   <meta name="author" content="Gudino Custom Woodworking" />
 
   <!-- PWA Meta Tags -->
@@ -33,17 +47,6 @@
   <meta name="application-name" content="Gudino Admin">
   <meta name="msapplication-TileColor" content="#1f2937">
   <meta name="msapplication-config" content="/browserconfig.xml">
-
-  <!-- Open Graph Meta Tags -->
-  <meta property="og:title" content="Gudino Custom Woodworking - Expert Carpenters & Cabinet Makers in Washington" />
-  <meta property="og:description"
-    content="Professional carpentry services including kitchen remodeling, bathroom renovations, and custom cabinet installation throughout Washington." />
-  <meta property="og:type" content="website" />
-  <meta property="og:url" content="https://gudinocustom.com" />
-  <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Gudino Custom Woodworking - Expert Carpenters & Cabinet Makers" />
-  <meta name="twitter:description"
-    content="Professional carpentry services including kitchen remodeling, bathroom renovations, and custom cabinet installation." />
 
   <!-- Icons -->
   <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
@@ -66,75 +69,8 @@
   <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Allura&family=Courgette&display=swap"></noscript>
 
   <title>Gudino Custom Woodworking</title>
-  <!-- Structured Data for SEO -->
-  <script type="application/ld+json">
-    {
-      "@context": "https://schema.org",
-      "@type": "LocalBusiness",
-      "name": "Gudino Custom Woodworking",
-      "image": "https://gudinocustom.com/O.png",
-      "description": "Expert carpenters specializing in kitchen remodeling, bathroom renovations, custom cabinet installation, and home remodeling throughout Washington.",
-      "url": "https://gudinocustom.com",
-      "telephone": "+1-509-515-4090",
-      "priceRange": "$$-$$$$",
-      "address": {
-        "@type": "PostalAddress",
-        "streetAddress": "70 Ray Rd",
-        "addressLocality": "Washington",
-        "addressRegion": "WA",
-        "postalCode": "98944",
-        "addressCountry": "US"
-      },
-      "geo": {
-        "@type": "GeoCoordinates",
-        "latitude": "46.297726",
-        "longitude": "-119.957238"
-      },
-      "openingHours": "Mo-Fr 08:00-17:00",
-      "serviceArea": {
-        "@type": "State",
-        "name": "Washington"
-      },
-      "hasOfferCatalog": {
-        "@type": "OfferCatalog",
-        "name": "Carpentry Services",
-        "itemListElement": [
-          {
-            "@type": "Offer",
-            "itemOffered": {
-              "@type": "Service",
-              "name": "Kitchen Remodeling",
-              "description": "Expert kitchen remodeling with custom cabinets and countertops"
-            }
-          },
-          {
-            "@type": "Offer",
-            "itemOffered": {
-              "@type": "Service",
-              "name": "Bathroom Renovation",
-              "description": "Professional bathroom remodeling with custom vanities and storage"
-            }
-          },
-          {
-            "@type": "Offer",
-            "itemOffered": {
-              "@type": "Service",
-              "name": "Custom Cabinet Installation",
-              "description": "Custom cabinet design and professional installation"
-            }
-          },
-          {
-            "@type": "Offer",
-            "itemOffered": {
-              "@type": "Service",
-              "name": "Custom Carpentry",
-              "description": "Master carpenters creating bespoke woodwork and built-ins"
-            }
-          }
-        ]
-      }
-    }
-    </script>
+  <!-- Structured data (JSON-LD) is written per page by scripts/prerender.js;
+       the old LocalBusiness block here had the wrong hours and city. -->
 
   
 </head>

@@ -22,7 +22,7 @@ const CabinetCare = () => {
     <>
       <SEO
         title={t('seo.cabinetCare.title')}
-        description="Expert tips for cleaning and maintaining your custom kitchen cabinets and bathroom vanities. Learn how to protect your investment and keep your cabinets looking new."
+        description={t("seo.cabinetCare.description")}
         keywords="cabinet care, cabinet maintenance, cleaning wood cabinets, cabinet cleaning tips, protect cabinets, cabinet care guide"
         canonical="https://gudinocustom.com/cabinet-care"
       />

@@ -6,6 +6,8 @@ import DesignerOrContactChoice from "../ui/DesignerOrContactChoice";
 import Footer from "../ui/Footer";
 import { announce } from "../ui/LiveRegion";
 import { DIMENSION_LIMITS } from "../../hooks/designer/useRoomManagement";
+import { fitPlanScale } from "../../utils/designer/roomScale";
+import InchInput from "./InchInput";
 
 const DimensionsSetup = ({
   activeRoom,
@@ -57,8 +59,11 @@ const DimensionsSetup = ({
     });
   };
 
+  // Each box also points at how to type it: feet (12' 6") or inches (96 1/2)
   const describedBy = (field) =>
-    `${errors[field] ? `kd-${field}-error ` : ""}kd-${field}-hint`;
+    `${errors[field] ? `kd-${field}-error ` : ""}kd-${field}-hint ${
+      field === "wallHeight" ? "kd-inches-format-hint" : "kd-feet-format-hint"
+    }`;
 
   // Validate, then show, announce and focus the first problem (WCAG 3.3.1)
   const onSubmit = () => {
@@ -77,10 +82,15 @@ const DimensionsSetup = ({
     setErrors({});
   };
 
+  // `rawValue`: a number from the length box, or "" when it is cleared
   const updateDimension = (field, rawValue) => {
-    const val = rawValue === "" ? "" : parseFloat(rawValue);
+    const val = rawValue === "" ? "" : Number(rawValue);
     setCurrentRoomData({
       ...currentRoomData,
+      // the scale the saved plan px were drawn at, before the size changes
+      // (the design step moves them to the new one: roomAtScale)
+      planScale:
+        currentRoomData.planScale ?? fitPlanScale(currentRoomData.dimensions),
       dimensions: {
         ...currentRoomData.dimensions,
         [field]: val,
@@ -203,19 +213,19 @@ const DimensionsSetup = ({
                     >
                       {fieldLabels.width}
                     </label>
-                    <input
+                    <InchInput
                       id="kd-room-width"
                       ref={fieldRefs.width}
-                      type="number"
-                      step="0.5"
+                      unit="ft"
+                      live
+                      enforceRange={false}
                       value={currentRoomData.dimensions.width}
-                      onChange={(e) => updateDimension("width", e.target.value)}
+                      onCommit={(v) => updateDimension("width", v)}
+                      onEmpty={() => updateDimension("width", "")}
                       className="w-full p-4 border-2 border-gray-500 rounded-xl focus:border-blue-700 focus:ring-2 focus:ring-blue-200 transition-all"
                       placeholder="12"
-                      min={DIMENSION_LIMITS.width.min}
-                      max={DIMENSION_LIMITS.width.max}
-                      aria-invalid={errors.width ? true : undefined}
-                      aria-describedby={describedBy("width")}
+                      invalid={!!errors.width}
+                      describedBy={describedBy("width")}
                     />
                     <p id="kd-width-hint" className="text-xs text-gray-700 mt-1">
                       {rangeHint("width")}
@@ -234,19 +244,19 @@ const DimensionsSetup = ({
                     >
                       {fieldLabels.height}
                     </label>
-                    <input
+                    <InchInput
                       id="kd-room-depth"
                       ref={fieldRefs.height}
-                      type="number"
-                      step="0.5"
+                      unit="ft"
+                      live
+                      enforceRange={false}
                       value={currentRoomData.dimensions.height}
-                      onChange={(e) => updateDimension("height", e.target.value)}
+                      onCommit={(v) => updateDimension("height", v)}
+                      onEmpty={() => updateDimension("height", "")}
                       className="w-full p-4 border-2 border-gray-500 rounded-xl focus:border-blue-700 focus:ring-2 focus:ring-blue-200 transition-all"
                       placeholder="10"
-                      min={DIMENSION_LIMITS.height.min}
-                      max={DIMENSION_LIMITS.height.max}
-                      aria-invalid={errors.height ? true : undefined}
-                      aria-describedby={describedBy("height")}
+                      invalid={!!errors.height}
+                      describedBy={describedBy("height")}
                     />
                     <p id="kd-height-hint" className="text-xs text-gray-700 mt-1">
                       {rangeHint("height")}
@@ -258,6 +268,9 @@ const DimensionsSetup = ({
                     )}
                   </div>
                 </div>
+                <p id="kd-feet-format-hint" className="text-xs text-gray-700">
+                  {t("designer.hint.feetInches")}
+                </p>
                 {/* Wall height input */}
                 {/* Single input for ceiling/wall height measurement */}
                 <div>
@@ -267,21 +280,24 @@ const DimensionsSetup = ({
                   >
                     {fieldLabels.wallHeight}
                   </label>
-                  <input
+                  <InchInput
                     id="kd-wall-height"
                     ref={fieldRefs.wallHeight}
-                    type="number"
+                    live
+                    enforceRange={false}
                     value={currentRoomData.dimensions.wallHeight}
-                    onChange={(e) => updateDimension("wallHeight", e.target.value)}
+                    onCommit={(v) => updateDimension("wallHeight", v)}
+                    onEmpty={() => updateDimension("wallHeight", "")}
                     className="w-full p-4 border-2 border-gray-500 rounded-xl focus:border-blue-700 focus:ring-2 focus:ring-blue-200 transition-all"
                     placeholder="96"
-                    min={DIMENSION_LIMITS.wallHeight.min}
-                    max={DIMENSION_LIMITS.wallHeight.max}
-                    aria-invalid={errors.wallHeight ? true : undefined}
-                    aria-describedby={describedBy("wallHeight")}
+                    invalid={!!errors.wallHeight}
+                    describedBy={describedBy("wallHeight")}
                   />
                   <p id="kd-wallHeight-hint" className="text-xs text-gray-700 mt-1">
                     {rangeHint("wallHeight")}
+                  </p>
+                  <p id="kd-inches-format-hint" className="text-xs text-gray-700 mt-1">
+                    {t("designer.hint.fraction")}
                   </p>
                   {errors.wallHeight && (
                     <p id="kd-wallHeight-error" className="text-sm text-red-700 mt-1">

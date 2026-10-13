@@ -1,39 +1,34 @@
 import React, { useState, useRef, useEffect, useId } from 'react';
-import { RotateCw, Trash2, X, ArrowLeftToLine, ArrowRightToLine } from 'lucide-react';
+import { RotateCw, Trash2, X, ArrowLeftToLine, ArrowRightToLine, AlertTriangle } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useIsMobile } from '../../hooks/useResponsive';
 import { getElementName } from './elementName';
+import { isQuarterTurned } from '../../utils/designer/rotation';
+import {
+  UPPER_HEIGHT_RANGE,
+  housingBay,
+  housingChangeProblem,
+  housingOf,
+  openingWidth,
+  widthForOpening,
+} from '../../utils/designer/housing';
+import { housingProblemText } from './housingMessage';
+import InchInput from './InchInput';
+import { formatInches, formatInchesPlain, roundInches } from '../../utils/designer/planUnits';
 
-// Module-level variable to persist panel position across component mounts
-let persistedPosition = { x: 20, y: 120 };
+// Module-level variable to persist panel position across component mounts;
+// null until the user moves it, so it opens docked to the right, clear of the
+// sidebar's View Mode buttons
+let persistedPosition = null;
 
 const PANEL_WIDTH = 288; // w-72
 const DOCK_MARGIN = 20;
+const PANEL_TOP = 120;
 
-// Number input that lets the user clear and retype a value; each valid number
-// is committed straight away, and the field shows the real value again on blur.
-const PositionInput = ({ id, value, min, max, onCommit, describedBy }) => {
-  const [draft, setDraft] = useState(null);
-  return (
-    <input
-      id={id}
-      type="number"
-      step="any"
-      inputMode="decimal"
-      min={min}
-      max={max}
-      value={draft ?? value}
-      onChange={(e) => {
-        setDraft(e.target.value);
-        const num = parseFloat(e.target.value);
-        if (!Number.isNaN(num)) onCommit(num);
-      }}
-      onBlur={() => setDraft(null)}
-      aria-describedby={describedBy}
-      className="w-full p-3 min-h-12 text-sm border rounded"
-    />
-  );
-};
+const rightDockX = () =>
+  typeof window === 'undefined'
+    ? DOCK_MARGIN
+    : Math.max(DOCK_MARGIN, window.innerWidth - PANEL_WIDTH - DOCK_MARGIN);
 
 const FloatingPropertiesPanel = ({
   selectedElement,
@@ -59,9 +54,18 @@ const FloatingPropertiesPanel = ({
   const fieldId = (name) => `${uid}-${name}`;
 
   // Use persisted position from module-level variable
-  const [position, setPosition] = useState(persistedPosition);
+  const [position, setPosition] = useState(
+    () => persistedPosition || { x: rightDockX(), y: PANEL_TOP }
+  );
 
   const [isDragging, setIsDragging] = useState(false);
+  // Why the last change to a refrigerator cabinet was declined (shown in the
+  // panel; the page also announces it), cleared by another item or a change
+  const [refusal, setRefusal] = useState(null);
+  useEffect(() => {
+    setRefusal(null);
+  }, [selectedElement]);
+
   const dragCacheRef = useRef({
     lastPosition: null,
     rafId: null,
@@ -176,9 +180,7 @@ const FloatingPropertiesPanel = ({
 
   // Single-click alternative to dragging the panel by its header (WCAG 2.5.7)
   const dockPanel = (side) => {
-    const x = side === 'left'
-      ? DOCK_MARGIN
-      : Math.max(DOCK_MARGIN, window.innerWidth - PANEL_WIDTH - DOCK_MARGIN);
+    const x = side === 'left' ? DOCK_MARGIN : rightDockX();
     setPosition((prev) => ({ ...prev, x }));
   };
 
@@ -195,12 +197,37 @@ const FloatingPropertiesPanel = ({
     t(`materials.${material}`, material.charAt(0).toUpperCase() + material.slice(1));
 
   // Position of the item's footprint, in inches from the left and top walls
-  const round1 = (n) => Math.round(n * 10) / 10;
-  const turned = element.rotation % 180 !== 0;
+  const turned = isQuarterTurned(element.rotation);
   const footprintWidth = turned ? element.depth : element.width;
   const footprintDepth = turned ? element.width : element.depth;
-  const maxX = Math.max(0, round1(parseFloat(currentRoomData.dimensions.width) * 12 - footprintWidth));
-  const maxY = Math.max(0, round1(parseFloat(currentRoomData.dimensions.height) * 12 - footprintDepth));
+  const maxX = Math.max(0, roundInches(parseFloat(currentRoomData.dimensions.width) * 12 - footprintWidth));
+  const maxY = Math.max(0, roundInches(parseFloat(currentRoomData.dimensions.height) * 12 - footprintDepth));
+
+  // A refrigerator cabinet (houses an appliance): changes that would leave the
+  // fridge inside no longer fitting are declined by updateElement
+  const housing = housingOf(element, elementTypes);
+  const wallHeight = parseFloat(currentRoomData.dimensions.wallHeight) || 96;
+  const changeHousing = (updates) => {
+    const problem = housingChangeProblem(element, updates, currentRoomData.elements, elementTypes, scale);
+    const ok = updateElement(element.id, updates);
+    setRefusal(ok === false && problem ? housingProblemText(t, problem, elementTypes) : null);
+  };
+  const housingHeight = element.actualHeight || elementSpec.defaultHeight;
+  const housingHeightMin = elementSpec.minHeight || 40;
+  const housingHeightMax = Math.max(housingHeightMin, wallHeight);
+  const upperMax = housing
+    ? Math.max(UPPER_HEIGHT_RANGE.min, Math.min(UPPER_HEIGHT_RANGE.max, housingHeight - 12))
+    : UPPER_HEIGHT_RANGE.max;
+  const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
+  // Hints read the limits as fractions ("Between 12 and 47 1/4 in"); every
+  // inch box also points at the shared "e.g. 24 3/8" hint
+  const range = (min, max) => t('designer.hint.range', { min: formatInchesPlain(min), max: formatInchesPlain(max), unit: t('designer.unit.in') });
+  const fmtHint = fieldId('fraction-hint');
+  const describe = (...ids) => [...ids, fmtHint].filter(Boolean).join(' ');
+  const refusalId = refusal ? fieldId('refusal') : null;
+  const heightMin = elementSpec.minHeight || (elementSpec.mountType === 'wall' ? 12 : 40);
+  const heightMax = (parseFloat(currentRoomData.dimensions.wallHeight) || 96) - (elementSpec.mountType === 'wall' ? (Number(element.mountHeight) || 0) : 0);
+  const mountMax = Math.max(0, (parseFloat(currentRoomData.dimensions.wallHeight) || 96) - (element.actualHeight || elementSpec.fixedHeight || elementSpec.defaultHeight));
 
   return (
     <>
@@ -294,35 +321,40 @@ const FloatingPropertiesPanel = ({
         <div className="p-4 overflow-y-auto custom-scrollbar">
           <div className="space-y-4">
 
+            {/* How to type a length; every inch box points here */}
+            <p id={fmtHint} className="text-xs text-gray-600">{t('designer.hint.fraction')}</p>
+
             {/* Position: typed alternative to dragging on the floor plan (WCAG 2.5.7) */}
             {onPositionChange && (
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label htmlFor={fieldId('posx')} className="block text-sm font-semibold text-gray-500 uppercase mb-1">{t('designer.positionX')}</label>
-                  <PositionInput
+                  <InchInput
                     id={fieldId('posx')}
-                    value={round1(element.x / scale)}
+                    value={roundInches(element.x / scale)}
                     min={0}
                     max={maxX}
-                    describedBy={fieldId('posx-hint')}
+                    live
+                    describedBy={describe(fieldId('posx-hint'))}
                     onCommit={(inches) => onPositionChange(element.id, 'x', inches)}
                   />
                   <p id={fieldId('posx-hint')} className="text-xs text-gray-600 mt-1">
-                    {t('designer.hint.range', { min: 0, max: maxX, unit: t('designer.unit.in') })}
+                    {range(0, maxX)}
                   </p>
                 </div>
                 <div>
                   <label htmlFor={fieldId('posy')} className="block text-sm font-semibold text-gray-500 uppercase mb-1">{t('designer.positionY')}</label>
-                  <PositionInput
+                  <InchInput
                     id={fieldId('posy')}
-                    value={round1(element.y / scale)}
+                    value={roundInches(element.y / scale)}
                     min={0}
                     max={maxY}
-                    describedBy={fieldId('posy-hint')}
+                    live
+                    describedBy={describe(fieldId('posy-hint'))}
                     onCommit={(inches) => onPositionChange(element.id, 'y', inches)}
                   />
                   <p id={fieldId('posy-hint')} className="text-xs text-gray-600 mt-1">
-                    {t('designer.hint.range', { min: 0, max: maxY, unit: t('designer.unit.in') })}
+                    {range(0, maxY)}
                   </p>
                 </div>
               </div>
@@ -357,24 +389,38 @@ const FloatingPropertiesPanel = ({
 
             {/* Dimensions Group */}
             <div className="grid grid-cols-2 gap-3">
-              {/* Width */}
-              {elementSpec.category === 'cabinet' && (
+              {/* Width (a refrigerator cabinet's is committed on Enter / blur, and may be declined) */}
+              {elementSpec.category === 'cabinet' && housing && (
                 <div>
                   <label htmlFor={fieldId('width')} className="block text-sm font-semibold text-gray-500 uppercase mb-1">{t('designer.widthIn')}</label>
-                  <input
+                  <InchInput
                     id={fieldId('width')}
-                    type="number"
-                    step="0.5"
-                    inputMode="decimal"
                     value={element.width}
-                    onChange={(e) => updateElement(element.id, { width: parseFloat(e.target.value) })}
-                    className="w-full p-3 min-h-12 text-sm border rounded"
-                    min="12"
-                    max="60"
-                    aria-describedby={fieldId('width-hint')}
+                    min={12}
+                    max={60}
+                    onCommit={(w) => changeHousing({ width: clamp(w, 12, 60) })}
+                    describedBy={describe(fieldId('width-hint'), refusalId)}
+                    invalid={!!refusal}
                   />
                   <p id={fieldId('width-hint')} className="text-xs text-gray-600 mt-1">
-                    {t('designer.hint.range', { min: 12, max: 60, unit: t('designer.unit.in') })}
+                    {range(12, 60)}
+                  </p>
+                </div>
+              )}
+              {elementSpec.category === 'cabinet' && !housing && (
+                <div>
+                  <label htmlFor={fieldId('width')} className="block text-sm font-semibold text-gray-500 uppercase mb-1">{t('designer.widthIn')}</label>
+                  <InchInput
+                    id={fieldId('width')}
+                    value={element.width}
+                    min={12}
+                    max={60}
+                    live
+                    onCommit={(w) => updateElement(element.id, { width: w })}
+                    describedBy={describe(fieldId('width-hint'))}
+                  />
+                  <p id={fieldId('width-hint')} className="text-xs text-gray-600 mt-1">
+                    {range(12, 60)}
                   </p>
                 </div>
               )}
@@ -383,40 +429,92 @@ const FloatingPropertiesPanel = ({
               {elementSpec.category === 'cabinet' && (
                 <div>
                   <label htmlFor={fieldId('depth')} className="block text-sm font-semibold text-gray-500 uppercase mb-1">{t('designer.depthIn')}</label>
-                  <input
+                  <InchInput
                     id={fieldId('depth')}
-                    type="number"
-                    step="0.5"
-                    inputMode="decimal"
                     value={element.depth}
-                    onChange={(e) => updateElement(element.id, { depth: parseFloat(e.target.value) })}
-                    className="w-full p-3 min-h-12 text-sm border rounded"
-                    min="12"
-                    max="36"
-                    aria-describedby={fieldId('depth-hint')}
+                    min={12}
+                    max={36}
+                    live
+                    onCommit={(d) => updateElement(element.id, { depth: d })}
+                    describedBy={describe(fieldId('depth-hint'))}
                   />
                   <p id={fieldId('depth-hint')} className="text-xs text-gray-600 mt-1">
-                    {t('designer.hint.range', { min: 12, max: 36, unit: t('designer.unit.in') })}
+                    {range(12, 36)}
                   </p>
                 </div>
               )}
             </div>
 
+            {/* Refrigerator cabinet: overall height (to the ceiling or the tall
+                cabinets' line) and the cabinet over the opening; neither may
+                come down onto the fridge inside */}
+            {housing && (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label htmlFor={fieldId('height')} className="block text-sm font-semibold text-gray-500 uppercase mb-1">{t('designer.heightIn')}</label>
+                  <InchInput
+                    id={fieldId('height')}
+                    value={housingHeight}
+                    min={housingHeightMin}
+                    max={housingHeightMax}
+                    onCommit={(h) => changeHousing({ actualHeight: clamp(h, housingHeightMin, housingHeightMax) })}
+                    describedBy={describe(fieldId('height-hint'), refusalId)}
+                    invalid={!!refusal}
+                  />
+                  <p id={fieldId('height-hint')} className="text-xs text-gray-600 mt-1">
+                    {t('designer.refrigeratorHeightHint', { min: formatInchesPlain(housingHeightMin), max: formatInchesPlain(housingHeightMax) })}
+                  </p>
+                </div>
+                <div>
+                  <label htmlFor={fieldId('upper')} className="block text-sm font-semibold text-gray-500 uppercase mb-1">{t('designer.upperHeight')}</label>
+                  <InchInput
+                    id={fieldId('upper')}
+                    value={housing.topHeight}
+                    min={UPPER_HEIGHT_RANGE.min}
+                    max={upperMax}
+                    onCommit={(u) => changeHousing({ upperHeight: clamp(u, UPPER_HEIGHT_RANGE.min, upperMax) })}
+                    describedBy={describe(fieldId('upper-hint'), refusalId)}
+                    invalid={!!refusal}
+                  />
+                  <p id={fieldId('upper-hint')} className="text-xs text-gray-600 mt-1">
+                    {t('designer.upperHeightHint', {
+                      min: formatInchesPlain(UPPER_HEIGHT_RANGE.min),
+                      max: formatInchesPlain(upperMax),
+                      open: formatInchesPlain(housingBay(element, elementTypes, 1).top - (Number(element.mountHeight) || 0)),
+                    })}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Why the last size change was declined (visible; the page's
+                notice announces it through the live region) */}
+            {housing && refusal && (
+              <p
+                id={fieldId('refusal')}
+                className="flex items-start gap-2 p-3 text-sm rounded border border-red-300 bg-red-50 text-red-800"
+              >
+                <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" aria-hidden="true" />
+                <span>{refusal}</span>
+              </p>
+            )}
+
             {/* Height - for variable height elements */}
-            {elementSpec.category === 'cabinet' && !elementSpec.fixedHeight && (
+            {elementSpec.category === 'cabinet' && !elementSpec.fixedHeight && !housing && (
               <div>
                 <label htmlFor={fieldId('height')} className="block text-sm font-semibold text-gray-500 uppercase mb-1">{t('designer.heightIn')}</label>
-                <input
+                <InchInput
                   id={fieldId('height')}
-                  type="number"
-                  step="0.5"
-                  inputMode="decimal"
                   value={element.actualHeight || elementSpec.defaultHeight}
-                  onChange={(e) => updateElement(element.id, { actualHeight: parseFloat(e.target.value) })}
-                  className="w-full p-3 min-h-12 text-sm border rounded"
-                  min={elementSpec.minHeight || (elementSpec.mountType === 'wall' ? 12 : 40)}
-                  max={elementSpec.mountType === 'wall' ? currentRoomData.dimensions.wallHeight - element.mountHeight : currentRoomData.dimensions.wallHeight}
+                  min={heightMin}
+                  max={Math.max(heightMin, heightMax)}
+                  live
+                  onCommit={(h) => updateElement(element.id, { actualHeight: h })}
+                  describedBy={describe(fieldId('height-hint'))}
                 />
+                <p id={fieldId('height-hint')} className="text-xs text-gray-600 mt-1">
+                  {range(heightMin, Math.max(heightMin, heightMax))}
+                </p>
               </div>
             )}
 
@@ -424,17 +522,18 @@ const FloatingPropertiesPanel = ({
             {elementSpec.mountHeight !== undefined && (
               <div>
                 <label htmlFor={fieldId('mount')} className="block text-sm font-semibold text-gray-500 uppercase mb-1">{t('designer.mountHeightIn')}</label>
-                <input
+                <InchInput
                   id={fieldId('mount')}
-                  type="number"
-                  step="0.5"
-                  inputMode="decimal"
                   value={element.mountHeight}
-                  onChange={(e) => updateElement(element.id, { mountHeight: parseFloat(e.target.value) })}
-                  className="w-full p-3 min-h-12 text-sm border rounded"
-                  min="0"
-                  max={parseFloat(currentRoomData.dimensions.wallHeight) - (element.actualHeight || elementSpec.fixedHeight || elementSpec.defaultHeight)}
+                  min={0}
+                  max={mountMax}
+                  live
+                  onCommit={(m) => updateElement(element.id, { mountHeight: m })}
+                  describedBy={describe(fieldId('mount-hint'))}
                 />
+                <p id={fieldId('mount-hint')} className="text-xs text-gray-600 mt-1">
+                  {range(0, mountMax)}
+                </p>
               </div>
             )}
 
@@ -478,6 +577,38 @@ const FloatingPropertiesPanel = ({
                 </button>
               </div>
             </fieldset>
+
+            {/* Refrigerator cabinet: the opening sets the cabinet width */}
+            {Array.isArray(elementSpec.openingWidths) && housingOf(element, elementTypes) && (() => {
+              const opening = Math.round(openingWidth(element, elementTypes) * 100) / 100;
+              const panel = housingOf(element, elementTypes).sidePanel;
+              const listed = elementSpec.openingWidths.includes(opening);
+              return (
+                <div>
+                  <label htmlFor={fieldId('opening')} className="block text-sm font-semibold text-gray-500 uppercase mb-1">{t('designer.openingWidth')}</label>
+                  <select
+                    id={fieldId('opening')}
+                    value={String(opening)}
+                    onChange={(e) => changeHousing({
+                      width: widthForOpening(element.type, parseFloat(e.target.value), elementTypes),
+                    })}
+                    className="w-full p-3 min-h-12 text-sm border rounded bg-gray-50 focus:bg-white transition-colors"
+                    aria-describedby={`${fieldId('opening-hint')}${refusal ? ` ${fieldId('refusal')}` : ''}`}
+                    aria-invalid={!!refusal || undefined}
+                  >
+                    {!listed && (
+                      <option value={String(opening)}>{t('designer.openingCustom', { width: formatInchesPlain(opening) })}</option>
+                    )}
+                    {elementSpec.openingWidths.map((w) => (
+                      <option key={w} value={String(w)}>{formatInches(w)}</option>
+                    ))}
+                  </select>
+                  <p id={fieldId('opening-hint')} className="text-xs text-gray-600 mt-1">
+                    {t('designer.openingWidthHint', { panel: formatInchesPlain(panel) })}
+                  </p>
+                </div>
+              );
+            })()}
 
             {/* Corner cabinet hinge direction */}
             {element.type && element.type.includes('corner') && (

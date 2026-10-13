@@ -1,50 +1,85 @@
 import { Helmet } from 'react-helmet-async';
+import { useLocation } from 'react-router-dom';
+import { useLanguage } from '../../contexts/LanguageContext';
+import {
+  OG_LOCALE,
+  SITE_NAME,
+  alternateLinks,
+  buildStructuredData,
+  canonicalUrl,
+  findPublicRoute,
+  formatTitle,
+  serializeJsonLd,
+  splitLanguagePath
+} from '../../seo/site';
 
 /**
  * SEO Component
- * Provides dynamic meta tags for each page to improve search engine optimization
- * and social media sharing
+ * Sets the title, description, canonical URL, hreflang alternates, Open Graph /
+ * Twitter tags and JSON-LD for the current page.
+ *
+ * Public pages (PUBLIC_ROUTES in src/seo/site.js) are also prerendered at build
+ * time with exactly these tags (scripts/prerender.js). The prerendered tags
+ * carry data-rh="true", so Helmet takes them over on the client instead of
+ * duplicating them. For those pages the canonical, alternates and JSON-LD come
+ * from the route table, keyed on the URL, so a crawler with or without
+ * JavaScript reads the same thing.
  */
-const SITE_NAME = 'Gudino Custom Woodworking';
+const DEFAULT_OG_IMAGE = 'https://gudinocustom.com/O.png';
 
 const SEO = ({
   title,
   description,
   keywords,
-  ogImage = 'https://gudinocustom.com/O.png',
-  canonical
+  ogImage = DEFAULT_OG_IMAGE,
+  canonical,
+  noindex = false
 }) => {
-  // Pages pass translated titles, some of which already name the business
-  // ("Por Qué Elegir Gudino Custom Woodworking"), so only add the suffix when
-  // it is missing - and never render "undefined | ..." when a page omits it.
-  const pageTitle = typeof title === 'string' ? title.trim() : '';
-  const fullTitle = !pageTitle
-    ? SITE_NAME
-    : pageTitle.toLowerCase().includes(SITE_NAME.toLowerCase())
-      ? pageTitle
-      : `${pageTitle} | ${SITE_NAME}`;
+  const { pathname } = useLocation();
+  const { t, currentLanguage } = useLanguage();
+
+  const { basePath } = splitLanguagePath(pathname);
+  const route = findPublicRoute(basePath);
+  const lang = currentLanguage === 'es' ? 'es' : 'en';
+
+  const fullTitle = formatTitle(title);
+  const canonicalHref = route ? canonicalUrl(route, lang) : canonical;
+  const alternates = route ? alternateLinks(route) : [];
+  const jsonLd = route && !noindex ? serializeJsonLd(buildStructuredData({ route, lang, t })) : null;
+  const otherLocale = lang === 'es' ? OG_LOCALE.en : OG_LOCALE.es;
 
   return (
     <Helmet>
       {/* Primary Meta Tags */}
       <title>{fullTitle}</title>
-      <meta name="description" content={description} />
-      <meta name="keywords" content={keywords} />
+      {description && <meta name="description" content={description} />}
+      {keywords && <meta name="keywords" content={keywords} />}
+      {noindex && <meta name="robots" content="noindex" />}
 
-      {/* Canonical URL */}
-      {canonical && <link rel="canonical" href={canonical} />}
+      {/* Canonical URL and language alternates */}
+      {canonicalHref && <link rel="canonical" href={canonicalHref} />}
+      {alternates.map((alt) => (
+        <link key={alt.hreflang} rel="alternate" hrefLang={alt.hreflang} href={alt.href} />
+      ))}
 
       {/* Open Graph / Facebook */}
       <meta property="og:type" content="website" />
+      <meta property="og:site_name" content={SITE_NAME} />
       <meta property="og:title" content={fullTitle} />
-      <meta property="og:description" content={description} />
+      {description && <meta property="og:description" content={description} />}
+      {canonicalHref && <meta property="og:url" content={canonicalHref} />}
       <meta property="og:image" content={ogImage} />
+      <meta property="og:locale" content={OG_LOCALE[lang]} />
+      {route && <meta property="og:locale:alternate" content={otherLocale} />}
 
       {/* Twitter Card */}
       <meta name="twitter:card" content="summary_large_image" />
       <meta name="twitter:title" content={fullTitle} />
-      <meta name="twitter:description" content={description} />
+      {description && <meta name="twitter:description" content={description} />}
       <meta name="twitter:image" content={ogImage} />
+
+      {/* Structured data (schema.org) */}
+      {jsonLd && <script type="application/ld+json">{jsonLd}</script>}
     </Helmet>
   );
 };

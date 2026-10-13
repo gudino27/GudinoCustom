@@ -1,9 +1,22 @@
 import React, { useId } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { localizePath } from '../../seo/site';
 
 const LanguageSelector = ({ className = '' }) => {
   const { currentLanguage, changeLanguage, availableLanguages, t } = useLanguage();
+  const { pathname, search, hash } = useLocation();
+  const navigate = useNavigate();
   const selectId = useId();
+
+  // Public pages have an address per language (/about, /es/about): move to
+  // the other one so the URL, hreflang and content agree. Other pages (admin,
+  // token links) have no language in the URL and stay where they are.
+  const handleChange = (lang) => {
+    const target = localizePath(pathname, lang);
+    changeLanguage(lang);
+    if (target !== pathname) navigate(target + search + hash, { replace: true });
+  };
 
   return (
     <div className={`relative ${className}`}>
@@ -12,7 +25,7 @@ const LanguageSelector = ({ className = '' }) => {
       <select
         id={selectId}
         value={currentLanguage}
-        onChange={(e) => changeLanguage(e.target.value)}
+        onChange={(e) => handleChange(e.target.value)}
         className="language-selector-glass"
         style={{
           background: 'rgba(255, 255, 255, 0.1)',

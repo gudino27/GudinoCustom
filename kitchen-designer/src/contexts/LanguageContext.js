@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import translations from '../utils/translations';
+import { localizePath, splitLanguagePath } from '../seo/site';
 
 const LanguageContext = createContext();
 
@@ -14,6 +15,12 @@ export const useLanguage = () => {
 export const LanguageProvider = ({ children }) => {
   // Try to get saved language from localStorage, default to browser language or English
   const getInitialLanguage = () => {
+    // A Spanish URL (/es, /es/about) always opens in Spanish: that is what
+    // search engines index and what shared links promise
+    if (splitLanguagePath(window.location.pathname).lang === 'es') {
+      return 'es';
+    }
+
     const saved = localStorage.getItem('kitchen-designer-language');
     if (saved && (saved === 'en' || saved === 'es')) {
       return saved;
@@ -73,6 +80,9 @@ export const LanguageProvider = ({ children }) => {
     language: currentLanguage,
     changeLanguage,
     t,
+    // Path of a public page in the current language ('/about' -> '/es/about');
+    // other paths (admin, token links) come back unchanged
+    localizedPath: (path) => localizePath(path, currentLanguage),
     // nativeName is each language's own name, shown with a matching lang attribute
     availableLanguages: [
       { code: 'en', name: 'English', nativeName: 'English' },

@@ -1,3 +1,4 @@
+import { isQuarterTurned } from './rotation';
 
 export const getWallName = (wallNumber) => {
   const wallNames = { 1: "North", 2: "East", 3: "South", 4: "West" };
@@ -15,14 +16,8 @@ export const getDoorTypes = () => {
 export const getElementsOnWall = (wallNumber, elements = [], roomWidth, roomHeight, scale, threshold = 20) => {
   if (!elements) return [];
   return elements.filter((element) => {
-    const elementWidth =
-      element.rotation === 0 || element.rotation === 180
-        ? element.width * scale
-        : element.depth * scale;
-    const elementDepth =
-      element.rotation === 0 || element.rotation === 180
-        ? element.depth * scale
-        : element.width * scale;
+    const elementWidth = !isQuarterTurned(element.rotation) ? element.width * scale : element.depth * scale;
+    const elementDepth = !isQuarterTurned(element.rotation) ? element.depth * scale : element.width * scale;
 
     switch (wallNumber) {
       case 1: // North/Top wall

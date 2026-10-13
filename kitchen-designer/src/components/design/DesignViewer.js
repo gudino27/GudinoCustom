@@ -14,6 +14,9 @@ import {
   Settings
 } from 'lucide-react';
 import DesignPreview from './DesignPreview';
+import { normalizeDesign } from '../../utils/designer/normalizeDesign';
+import { formatFeet, formatInches } from '../../utils/designer/planUnits';
+import { elementTypes } from '../../constants/elementTypes';
 import sessionManager from '../utils/sessionManager';
 import { useLanguage } from '../../contexts/LanguageContext';
 
@@ -35,35 +38,6 @@ const DesignViewer = ({ token, API_BASE, userRole }) => {
     totalQuotes: 0,
     statusBreakdown: { new: 0, contacted: 0, quote_sent: 0, converted: 0, closed: 0 }
   });
-  const [isEditing, setIsEditing] = useState(false);
-
-  // Handle 3D element updates
-  const handleUpdateElement = (elementId, updates) => {
-    setSelectedDesign(prev => {
-      const newDesign = { ...prev };
-      
-      // Helper to update elements in a room
-      const updateRoomElements = (roomData) => {
-        if (!roomData || !roomData.elements) return roomData;
-        const elementIndex = roomData.elements.findIndex(el => el.id === elementId);
-        if (elementIndex === -1) return roomData;
-        
-        const newElements = [...roomData.elements];
-        newElements[elementIndex] = { ...newElements[elementIndex], ...updates };
-        return { ...roomData, elements: newElements };
-      };
-
-      if (newDesign.kitchen_data) {
-        newDesign.kitchen_data = updateRoomElements(newDesign.kitchen_data);
-      }
-      if (newDesign.bathroom_data) {
-        newDesign.bathroom_data = updateRoomElements(newDesign.bathroom_data);
-      }
-      
-      return newDesign;
-    });
-  };
-
   // New state for enhanced functionality
   const [sortConfig, setSortConfig] = useState({ key: 'created_at', direction: 'desc' });
 
@@ -250,7 +224,9 @@ const DesignViewer = ({ token, API_BASE, userRole }) => {
 
       if (response.ok) {
         const data = await response.json();
-        setSelectedDesign(data);
+        // Older designs: negative rotations, missing fields, walls and
+        // pantries in an older shape (utils/designer/normalizeDesign.js)
+        setSelectedDesign(normalizeDesign(data, { elementTypes }));
         // Reload designs to update status
         loadDesigns();
         loadStats();
@@ -1418,24 +1394,13 @@ const DesignViewer = ({ token, API_BASE, userRole }) => {
                   </div>
                 </div>
 
-                {/* Design Preview */}
-                {/* Design Preview */}
+                {/* Design Preview (view-only) */}
                 <div className="mb-6">
-                  <div className="flex justify-between items-center mb-3">
-                    <h3 className="font-semibold">Design Visualization</h3>
-                    <button
-                        onClick={() => setIsEditing(!isEditing)}
-                        className={`px-3 py-1 rounded text-sm font-medium transition-colors ${isEditing ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
-                    >
-                        {isEditing ? 'Done Editing' : 'Edit 3D Layout'}
-                    </button>
-                  </div>
+                  <h3 className="font-semibold mb-3">{t('designViewer.designVisualization')}</h3>
                   <DesignPreview
                     designData={selectedDesign}
-                    hasKitchen={selectedDesign.include_kitchen && selectedDesign.kitchen_data}
-                    hasBathroom={selectedDesign.include_bathroom && selectedDesign.bathroom_data}
-                    interactive={isEditing}
-                    onUpdateElement={handleUpdateElement}
+                    hasKitchen={!!(selectedDesign.include_kitchen && selectedDesign.kitchen_data)}
+                    hasBathroom={!!(selectedDesign.include_bathroom && selectedDesign.bathroom_data)}
                   />
                 </div>
 
@@ -1444,7 +1409,7 @@ const DesignViewer = ({ token, API_BASE, userRole }) => {
                   <div className="mb-6 p-4 bg-gray-50 rounded-lg">
                     <h3 className="font-semibold mb-3">Kitchen Details</h3>
                     <p className="text-sm text-gray-600 mb-2">
-                      Room Dimensions: {selectedDesign.kitchen_data.dimensions.width}' × {selectedDesign.kitchen_data.dimensions.height}' × {selectedDesign.kitchen_data.dimensions.wallHeight}" height
+                      Room Dimensions: {formatFeet(selectedDesign.kitchen_data.dimensions.width)} × {formatFeet(selectedDesign.kitchen_data.dimensions.height)} × {formatInches(selectedDesign.kitchen_data.dimensions.wallHeight)} height
                     </p>
                     <p className="text-sm text-gray-600 mb-2">
                       Total Items: {selectedDesign.kitchen_data.elements.length}
@@ -1456,7 +1421,7 @@ const DesignViewer = ({ token, API_BASE, userRole }) => {
                           .filter(el => el.category === 'cabinet')
                           .map((cabinet, idx) => (
                             <li key={idx}>
-                              • {cabinet.type} ({cabinet.width}" × {cabinet.depth}") -
+                              • {cabinet.type} ({formatInches(cabinet.width)} × {formatInches(cabinet.depth)}) -
                               Material: {selectedDesign.kitchen_data.materials[cabinet.id] || 'laminate'}
                             </li>
                           ))
@@ -1470,7 +1435,7 @@ const DesignViewer = ({ token, API_BASE, userRole }) => {
                   <div className="mb-6 p-4 bg-gray-50 rounded-lg">
                     <h3 className="font-semibold mb-3">Bathroom Details</h3>
                     <p className="text-sm text-gray-600 mb-2">
-                      Room Dimensions: {selectedDesign.bathroom_data.dimensions.width}' × {selectedDesign.bathroom_data.dimensions.height}' × {selectedDesign.bathroom_data.dimensions.wallHeight}" height
+                      Room Dimensions: {formatFeet(selectedDesign.bathroom_data.dimensions.width)} × {formatFeet(selectedDesign.bathroom_data.dimensions.height)} × {formatInches(selectedDesign.bathroom_data.dimensions.wallHeight)} height
                     </p>
                     <p className="text-sm text-gray-600 mb-2">
                       Total Items: {selectedDesign.bathroom_data.elements.length}
@@ -1482,7 +1447,7 @@ const DesignViewer = ({ token, API_BASE, userRole }) => {
                           .filter(el => el.category === 'cabinet')
                           .map((cabinet, idx) => (
                             <li key={idx}>
-                              • {cabinet.type} ({cabinet.width}" × {cabinet.depth}") -
+                              • {cabinet.type} ({formatInches(cabinet.width)} × {formatInches(cabinet.depth)}) -
                               Material: {selectedDesign.bathroom_data.materials[cabinet.id] || 'laminate'}
                             </li>
                           ))

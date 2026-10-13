@@ -1,4 +1,6 @@
 import { getWallName, getElementsOnWall, getCustomWallByNumber, getClosestPointOnLine } from '../../utils/designer/wallViewUtils';
+import { nextWallNumber as nextFreeWallNumber } from '../../utils/designer/pantry';
+import { roundPlanPx } from '../../utils/designer/planUnits';
 export const useWallManagement = ({
   currentRoomData,
   setCurrentRoomData,
@@ -170,14 +172,17 @@ export const useWallManagement = ({
     const snappedEnd = snapToWallEndpoints(x2, y2);
 
     const newWallId = `custom-${Date.now()}`;
-    const nextWallNumber = Math.max(...allAvailableWalls) + 1;
+    // past every number in use, pantry walls included (a pantry keeps a
+    // number for each side, built or not)
+    const nextWallNumber = Math.max(Math.max(...allAvailableWalls) + 1, nextFreeWallNumber(currentRoomData));
 
     const newCustomWall = {
       id: newWallId,
-      x1: snappedStart.x,
-      y1: snappedStart.y,
-      x2: snappedEnd.x,
-      y2: snappedEnd.y,
+      // px on the 1/16" grid (utils/designer/planUnits.js)
+      x1: roundPlanPx(snappedStart.x, scale),
+      y1: roundPlanPx(snappedStart.y, scale),
+      x2: roundPlanPx(snappedEnd.x, scale),
+      y2: roundPlanPx(snappedEnd.y, scale),
       thickness: 6, // Default wall thickness in pixels
       isCustom: true,
       existedPrior: false, // Track if this wall existed before modifications
@@ -191,7 +196,7 @@ export const useWallManagement = ({
       ...currentRoomData,
       customWalls: [...customWalls, newCustomWall],
       allAvailableWalls: [...allAvailableWalls, nextWallNumber],
-      walls: [...currentWalls, nextWallNumber].sort(),
+      walls: [...currentWalls, nextWallNumber].sort((a, b) => a - b),
     });
 
     return nextWallNumber;
@@ -290,12 +295,20 @@ export const useWallManagement = ({
 
     const preset = presets[presetType];
     if (preset) {
+      // A layout starts the room over: it clears every placed item. One
+      // click next to "Add pantry" used to empty the design without a word
+      const count = (currentRoomData.elements || []).length;
+      if (count && !window.confirm(t("designer.confirmPreset", { count }))) {
+        return;
+      }
       // Update originalWalls to match the preset - walls removed by preset
       // are treated as "never existed" so user isn't charged for their removal
       // Only walls that exist in the preset are considered "original"
+      // A pantry's walls stay (they are not room walls)
+      const pantryWalls = customWalls.filter((w) => w.pantryId).map((w) => w.wallNumber);
       setCurrentRoomData({
         ...currentRoomData,
-        walls: preset.walls,
+        walls: [...preset.walls, ...pantryWalls],
         removedWalls: [], // No removed walls since preset defines the starting layout
         originalWalls: preset.walls, // Only preset walls are "original" - removing them later will cost
         elements: [], // Clear existing elements when changing floor plan
@@ -334,10 +347,10 @@ export const useWallManagement = ({
         const halfLength = length / 2;
         return {
           ...wall,
-          x1: centerX - halfLength * Math.cos(angleRad),
-          y1: centerY - halfLength * Math.sin(angleRad),
-          x2: centerX + halfLength * Math.cos(angleRad),
-          y2: centerY + halfLength * Math.sin(angleRad),
+          x1: roundPlanPx(centerX - halfLength * Math.cos(angleRad), scale),
+          y1: roundPlanPx(centerY - halfLength * Math.sin(angleRad), scale),
+          x2: roundPlanPx(centerX + halfLength * Math.cos(angleRad), scale),
+          y2: roundPlanPx(centerY + halfLength * Math.sin(angleRad), scale),
           angle: newAngleDegrees, // Store the angle for display
         };
       }
@@ -361,10 +374,10 @@ export const useWallManagement = ({
 
         return {
           ...wall,
-          x1: centerX - halfLength * Math.cos(angle),
-          y1: centerY - halfLength * Math.sin(angle),
-          x2: centerX + halfLength * Math.cos(angle),
-          y2: centerY + halfLength * Math.sin(angle),
+          x1: roundPlanPx(centerX - halfLength * Math.cos(angle), scale),
+          y1: roundPlanPx(centerY - halfLength * Math.sin(angle), scale),
+          x2: roundPlanPx(centerX + halfLength * Math.cos(angle), scale),
+          y2: roundPlanPx(centerY + halfLength * Math.sin(angle), scale),
         };
       }
       return wall;

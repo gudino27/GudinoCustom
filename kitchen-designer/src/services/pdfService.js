@@ -1,6 +1,8 @@
 import jsPDF from 'jspdf';
 import { elementTypes } from '../constants/elementTypes';
 import { announce } from '../components/ui/LiveRegion';
+import { materialMultiplierFor } from '../utils/designer/pricing';
+import { formatFeet, formatInches } from '../utils/designer/planUnits';
 
 //  constants 
 const COMPANY_NAME = process.env.REACT_APP_COMPANY_NAME || 'Gudino Custom WoodWorking LLC';
@@ -135,7 +137,7 @@ export const generatePDF = async ({
     pdf.setFontSize(PDF_STYLES.bodyFont);
     pdf.setFont('helvetica', 'normal');
     pdf.setTextColor(...PDF_STYLES.grayColor);
-    pdf.text(`Dimensions: ${room.data.dimensions.width}' W × ${room.data.dimensions.height}' D × ${room.data.dimensions.wallHeight}" H`, margin, currentY);
+    pdf.text(`Dimensions: ${formatFeet(room.data.dimensions.width)} W × ${formatFeet(room.data.dimensions.height)} D × ${formatInches(room.data.dimensions.wallHeight)} H`, margin, currentY);
     currentY += 10;
 
     // Cabinet specifications for this room
@@ -168,13 +170,13 @@ export const generatePDF = async ({
         const spec = elementTypes[cabinet.type];
         const material = room.data.materials[cabinet.id] || 'laminate';
         const basePrice = basePrices[cabinet.type] || 250;
-        const materialMultiplier = materialMultipliers[material];
+        const materialMultiplier = materialMultiplierFor(material, materialMultipliers);
         const sizeMultiplier = cabinet.width / 24;
         const price = basePrice * materialMultiplier * sizeMultiplier;
 
         pdf.text(`${index + 1}`, margin, currentY);
         pdf.text(spec.name || cabinet.type, margin + 8, currentY);
-        pdf.text(`${cabinet.width}" × ${cabinet.depth}" × ${cabinet.actualHeight || spec.fixedHeight}"`, margin + 70, currentY);
+        pdf.text(`${formatInches(cabinet.width)} × ${formatInches(cabinet.depth)} × ${formatInches(cabinet.actualHeight || spec.fixedHeight || spec.defaultHeight)}`, margin + 70, currentY);
         pdf.text(material.charAt(0).toUpperCase() + material.slice(1), margin + 110, currentY);
         pdf.text(`$${price.toFixed(2)}`, pageWidth - margin, currentY, { align: 'right' });
         currentY += PDF_STYLES.lineHeight;
@@ -285,14 +287,20 @@ const capture3DViews = async (setViewMode, currentRoomData, cameraRef) => {
   try {
     // Switch to 3D view
     setViewMode('3d');
-    
-    // Wait for 3D scene to fully render
-    await new Promise(resolve => setTimeout(resolve, 1500));
 
-    // Find the 3D canvas element
-    const canvas3D = document.querySelector('.w-full.h-full.bg-gray-100 canvas') || 
-                     document.querySelector('canvas[data-engine]') ||
-                     document.querySelector('canvas');
+    // Wait for the 3D view: the engine view may still be loading its chunk
+    // and building the kitchen, so poll for its canvas and camera controller
+    // (up to ~10 s), then give the scene a moment to draw
+    const find3DCanvas = () =>
+      document.querySelector('[data-designer3d] canvas') ||
+      document.querySelector('.w-full.h-full.bg-gray-100 canvas');
+    let canvas3D = null;
+    for (let i = 0; i < 40 && !(canvas3D && (!cameraRef || cameraRef.current?.setWallView)); i++) {
+      await new Promise(resolve => setTimeout(resolve, 250));
+      canvas3D = find3DCanvas();
+    }
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    canvas3D = find3DCanvas();
 
     if (!canvas3D) {
       console.warn('3D canvas not found');
@@ -350,7 +358,11 @@ export const sendQuote = async ({
   setViewMode,
   selectedWall,
   setSelectedWall,
-  cameraRef  // New: ref to 3D camera controller
+  cameraRef,  // New: ref to 3D camera controller
+  // Wall views to capture: 1-4 plus each face of a drawn or pantry wall
+  // ("7:left"), and their names for the PDF
+  wallKeys = [1, 2, 3, 4],
+  wallLabel = (wall) => `Wall ${wall}`
 }) => {
   // Validate required client information. Errors are returned (and announced)
   // instead of shown in an alert() so they reach assistive tech (WCAG 3.3.1).
@@ -454,7 +466,7 @@ export const sendQuote = async ({
     setViewMode('wall');
     await new Promise(resolve => setTimeout(resolve, 100));
 
-    for (let wall = 1; wall <= 4; wall++) {
+    for (const wall of wallKeys) {
       setSelectedWall(wall);
       await new Promise(resolve => setTimeout(resolve, 100));
 
@@ -464,6 +476,7 @@ export const sendQuote = async ({
         if (wallImage) {
           wallViewImages.push({
             wall: wall,
+            label: wallLabel(wall),
             image: wallImage
           });
         }
@@ -548,7 +561,7 @@ export const sendQuote = async ({
 
         pdf.setFontSize(11);
         pdf.setFont('helvetica', 'bold');
-        pdf.text(`Wall ${wallViewImages[i].wall}`, margin, currentY);
+        pdf.text(String(wallViewImages[i].label || `Wall ${wallViewImages[i].wall}`).replace(/\u2014/g, '-'), margin, currentY);
         pdf.setFontSize(PDF_STYLES.smallFont);
         pdf.setFont('helvetica', 'normal');
         pdf.setTextColor(...PDF_STYLES.grayColor);
@@ -588,7 +601,7 @@ export const sendQuote = async ({
       pdf.setFontSize(PDF_STYLES.bodyFont);
       pdf.setFont('helvetica', 'normal');
       pdf.setTextColor(...PDF_STYLES.grayColor);
-      pdf.text(`${room.data.dimensions.width}' W × ${room.data.dimensions.height}' D`, margin + 50, currentY);
+      pdf.text(`${formatFeet(room.data.dimensions.width)} W × ${formatFeet(room.data.dimensions.height)} D`, margin + 50, currentY);
       pdf.setTextColor(...PDF_STYLES.primaryColor);
       currentY += 8;
 
@@ -614,7 +627,7 @@ export const sendQuote = async ({
         const material = room.data.materials[cabinet.id] || 'laminate';
         pdf.text(`${index + 1}`, margin, currentY);
         pdf.text(cabinet.type, margin + 8, currentY);
-        pdf.text(`${cabinet.width}" × ${cabinet.depth}"`, margin + 80, currentY);
+        pdf.text(`${formatInches(cabinet.width)} × ${formatInches(cabinet.depth)}`, margin + 80, currentY);
         pdf.text(material.charAt(0).toUpperCase() + material.slice(1), margin + 130, currentY);
         currentY += PDF_STYLES.lineHeight;
 

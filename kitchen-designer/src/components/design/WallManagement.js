@@ -1,6 +1,10 @@
 import React, { useState } from 'react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { announce } from '../ui/LiveRegion';
+import { wallCharges } from '../../utils/designer/pricing';
+import { formatInches } from './plan/planStyle';
+import { parseInches, roundInches } from '../../utils/designer/planUnits';
+import InchInput from './InchInput';
 
 const DOOR_MIN_WIDTH = 18;
 const DOOR_MAX_WIDTH = 48;
@@ -116,7 +120,8 @@ const WallManagement = ({
               if (wallNum <= 4) return true;
               // For custom walls, only show if they exist in customWalls array AND are either present or removed but were originally added
               const customWall = getCustomWallByNumber(wallNum);
-              if (customWall) return true;
+              // A pantry's walls are managed with the pantry (its panel)
+              if (customWall) return !customWall.pantryId;
               // Don't show custom wall numbers that no longer have corresponding wall objects
               return false;
             }).map(wallNum => {
@@ -285,7 +290,7 @@ const WallManagement = ({
                         <div key={door.id} className="p-2 bg-blue-50 rounded border border-blue-200" role="group" aria-labelledby={`kd-door-name-${door.id}`}>
                           <div className="flex items-center justify-between mb-2">
                             <span className="text-xs font-medium text-blue-800" id={`kd-door-name-${door.id}`}>
-                              {doorTypeLabel(door.type)} ({door.width}")
+                              {doorTypeLabel(door.type)} ({formatInches(door.width)})
                             </span>
                             <button
                               type="button"
@@ -326,24 +331,19 @@ const WallManagement = ({
                             {/* Width input */}
                             <div className="flex items-center gap-2">
                               <label htmlFor={`kd-door-width-${door.id}`} className="text-xs text-blue-800 w-16">{t('doors.width')}:</label>
-                              <input
+                              <InchInput
                                 id={`kd-door-width-${door.id}`}
-                                type="number"
                                 min={DOOR_MIN_WIDTH}
                                 max={DOOR_MAX_WIDTH}
+                                live
                                 value={door.width}
-                                onChange={(e) => {
-                                  const newWidth = parseFloat(e.target.value);
-                                  if (newWidth >= DOOR_MIN_WIDTH && newWidth <= DOOR_MAX_WIDTH) {
-                                    updateDoor(door.id, { width: newWidth });
-                                  }
-                                }}
-                                aria-describedby={`kd-door-width-hint-${door.id}`}
-                                className="flex-1 px-2 py-1 text-xs border border-blue-300 rounded focus:border-blue-500 focus:outline-none"
+                                onCommit={(newWidth) => updateDoor(door.id, { width: newWidth })}
+                                describedBy={`kd-door-width-hint-${door.id}`}
+                                className="flex-1 min-w-0 px-2 py-1 text-xs border border-blue-300 rounded focus:border-blue-500 focus:outline-none"
                               />
                               <span className="text-xs text-blue-800">{t('doors.inches')}</span>
                               <span className="sr-only" id={`kd-door-width-hint-${door.id}`}>
-                                {t('designer.hint.range', { min: DOOR_MIN_WIDTH, max: DOOR_MAX_WIDTH, unit: t('doors.inches') })}
+                                {t('designer.hint.range', { min: DOOR_MIN_WIDTH, max: DOOR_MAX_WIDTH, unit: t('doors.inches') })}. {t('designer.hint.fraction')}
                               </span>
                             </div>
 
@@ -390,10 +390,11 @@ const WallManagement = ({
                           <div className="flex items-center gap-2">
                             <label htmlFor={`door-width-${wallNum}`} className="text-xs text-green-800 w-16">{t('doors.width')}:</label>
                             <input
-                              type="number"
+                              type="text"
+                              inputMode="decimal"
+                              autoComplete="off"
+                              spellCheck={false}
                               id={`door-width-${wallNum}`}
-                              min={DOOR_MIN_WIDTH}
-                              max={DOOR_MAX_WIDTH}
                               defaultValue="36"
                               aria-invalid={doorWidthErrors[wallNum] ? true : undefined}
                               aria-describedby={`${doorWidthErrors[wallNum] ? `kd-door-error-${wallNum} ` : ''}kd-new-door-hint-${wallNum}`}
@@ -401,7 +402,7 @@ const WallManagement = ({
                             />
                             <span className="text-xs text-green-800">{t('doors.inches')}</span>
                             <span className="sr-only" id={`kd-new-door-hint-${wallNum}`}>
-                              {t('designer.hint.range', { min: DOOR_MIN_WIDTH, max: DOOR_MAX_WIDTH, unit: t('doors.inches') })}
+                              {t('designer.hint.range', { min: DOOR_MIN_WIDTH, max: DOOR_MAX_WIDTH, unit: t('doors.inches') })}. {t('designer.hint.fraction')}
                             </span>
                           </div>
 
@@ -419,10 +420,11 @@ const WallManagement = ({
                               const typeSelect = document.getElementById(`door-type-${wallNum}`);
                               const widthInput = document.getElementById(`door-width-${wallNum}`);
                               const doorType = typeSelect.value;
-                              const width = parseFloat(widthInput.value) || 36;
+                              // typed inches, fractions allowed (36, 35 1/2, 2' 10"); empty means 36
+                              const width = widthInput.value.trim() === '' ? 36 : parseInches(widthInput.value);
                               const position = 50; // Default center position
 
-                              if (width >= DOOR_MIN_WIDTH && width <= DOOR_MAX_WIDTH) {
+                              if (width !== null && width >= DOOR_MIN_WIDTH && width <= DOOR_MAX_WIDTH) {
                                 setDoorWidthErrors(prev => ({ ...prev, [wallNum]: null }));
                                 addDoor(wallNum, position, width, doorType);
                                 announce(t('designer.doorAdded', { wall: getWallName(wallNum) }));
@@ -480,20 +482,19 @@ const WallManagement = ({
                       </button>
 
                       <div className="space-y-1">
-                        <label htmlFor={`kd-wall-length-${wallNum}`} className="block text-xs text-gray-700">{t('designer.wallLength')}: {wallLengthInches.toFixed(1)}"</label>
+                        <label htmlFor={`kd-wall-length-${wallNum}`} className="block text-xs text-gray-700">{t('designer.wallLength')}: {formatInches(wallLengthInches)}</label>
                         <div className="flex gap-1">
-                          <input
+                          <InchInput
                             id={`kd-wall-length-${wallNum}`}
-                            type="number"
-                            min="12"
-                            step="1"
-                            value={Math.round(wallLengthInches)}
-                            onChange={(e) => {
-                              const newLength = parseFloat(e.target.value) || 12;
+                            min={12}
+                            value={roundInches(wallLengthInches)}
+                            onCommit={(newLength) => {
                               if (resizeCustomWall) resizeCustomWall(wallNum, newLength);
                             }}
-                            className="flex-1 text-xs px-1 py-1 border rounded"
+                            describedBy={`kd-wall-length-hint-${wallNum}`}
+                            className="flex-1 min-w-0 text-xs px-1 py-1 border rounded"
                           />
+                          <span className="sr-only" id={`kd-wall-length-hint-${wallNum}`}>{t('designer.hint.fraction')}</span>
                         </div>
                       </div>
 
@@ -538,17 +539,22 @@ const WallManagement = ({
                 <div className="font-medium text-yellow-900">{t('pricing.walls')}:</div>
                 <div className="text-yellow-900">
                   {(() => {
-                    const removedWalls = currentRoomData.removedWalls || [];
-                    const chargeableRemoved = removedWalls.filter(wall => originalWalls.includes(wall));
-                    const customAdded = (currentRoomData.walls || []).filter(wall => !originalWalls.includes(wall));
+                    // Same charges as the estimate: pantry walls at the pantry price, not as custom walls
+                    const charges = wallCharges({ ...currentRoomData, originalWalls }, wallPricing);
 
                     return (
                       <>
-                        {chargeableRemoved.length > 0 && (
-                          <div>{t('designer.wallsRemovedCost', { count: chargeableRemoved.length, cost: (chargeableRemoved.length * wallPricing.removeWall).toFixed(2) })}</div>
+                        {charges.removed.count > 0 && (
+                          <div>{t('designer.wallsRemovedCost', { count: charges.removed.count, cost: charges.removed.cost.toFixed(2) })}</div>
                         )}
-                        {customAdded.length > 0 && (
-                          <div>{t('designer.wallsAddedCost', { count: customAdded.length, cost: (customAdded.length * wallPricing.addWall).toFixed(2) })}</div>
+                        {charges.added.count > 0 && (
+                          <div>{t('designer.wallsAddedCost', { count: charges.added.count, cost: charges.added.cost.toFixed(2) })}</div>
+                        )}
+                        {charges.pantryWalls.count > 0 && (
+                          <div>{t('designer.pantryWallsCost', { count: charges.pantryWalls.count, cost: charges.pantryWalls.cost.toFixed(2) })}</div>
+                        )}
+                        {charges.openings.count > 0 && charges.openings.cost > 0 && (
+                          <div>{t('designer.pantryOpeningsCost', { count: charges.openings.count, cost: charges.openings.cost.toFixed(2) })}</div>
                         )}
                       </>
                     );

@@ -1,5 +1,8 @@
 import React from 'react';
 import { getDoorsOnWall } from '../../utils/designer/wallViewUtils';
+import { doorsSeenFrom, elementsOnWallFace, parseWallKey, wallAxes } from '../../utils/designer/wallFaces';
+import { housedElements, housingOf, verticalRange } from '../../utils/designer/housing';
+import { formatFeet, formatInches } from '../../utils/designer/planUnits';
 
 const WallView = ({
   wallNum,
@@ -22,13 +25,23 @@ const WallView = ({
   describedBy,
   wallLabel
 }) => {
-  const wall = wallNum || selectedWall;
+  // A room wall (1-4) or one face of a drawn / pantry wall ("7:left")
+  const { wallNumber: wall, face: keyFace } = parseWallKey(wallNum || selectedWall);
+  const customWall = wall > 4
+    ? (currentRoomData.customWalls || []).find((w) => w.wallNumber === wall) || null
+    : null;
+  const face = customWall ? keyFace || 'right' : null;
+  // Items against that face, with their distance from its left end (inches)
+  const faceItems = customWall
+    ? elementsOnWallFace(customWall, face, currentRoomData.elements, scale)
+    : [];
+  const faceX = new Map(faceItems.map((o) => [o.element.id, o.x]));
   
   // Calculate room dimensions for element filtering
   const roomWidth = parseFloat(currentRoomData.dimensions.width) * 12 * scale;
   const roomHeight = parseFloat(currentRoomData.dimensions.height) * 12 * scale;
 
-  const wallElements = getElementsOnWall(wall, currentRoomData.elements, roomWidth, roomHeight, scale).sort((a, b) => {
+  const wallElements = customWall ? faceItems.map((o) => o.element) : getElementsOnWall(wall, currentRoomData.elements, roomWidth, roomHeight, scale).sort((a, b) => {
     // Sort elements left-to-right or top-to-bottom based on wall orientation
     if (wall === 1 || wall === 3) {
       return a.x - b.x; // Horizontal walls: sort by x position
@@ -38,7 +51,9 @@ const WallView = ({
   });
 
   // Calculate wall dimensions and scale
-  const wallWidth = wall === 1 || wall === 3
+  const wallWidth = customWall
+    ? wallAxes(customWall).length / scale
+    : wall === 1 || wall === 3
     ? parseFloat(currentRoomData.dimensions.width) * 12
     : parseFloat(currentRoomData.dimensions.height) * 12;
   const wallHeight = parseFloat(currentRoomData.dimensions.wallHeight);
@@ -66,12 +81,14 @@ const WallView = ({
 
       {/* Wall title */}
       <text x={50 + (wallWidth * calculatedViewScale) / 2} y="20" textAnchor="middle" fontSize="12" fontWeight="bold">
-        Wall {wall} - {(wallWidth / 12).toFixed(1)}'
+        {customWall && wallLabel ? wallLabel : `Wall ${wall}`} - {formatFeet(wallWidth / 12)}
       </text>
 
       {/* Room Doors on this wall */}
       {(() => {
-        const doorsOnWall = getDoorsOnWall(wall, currentRoomData.doors || []);
+        const doorsOnWall = customWall
+          ? doorsSeenFrom(customWall, face, currentRoomData.doors || [])
+          : getDoorsOnWall(wall, currentRoomData.doors || []);
         const doorHeight = 80; // Standard door height in inches
         
         return doorsOnWall.map((door, idx) => {
@@ -79,6 +96,52 @@ const WallView = ({
           const doorWidthInches = door.width || 32;
           const doorX = (door.position / 100) * wallWidth - (doorWidthInches / 2);
           const doorYPos = wallHeight - doorHeight; // Door from floor
+
+          // Cased opening (a pantry's doorway): the opening and its casing, no door
+          if (door.type === 'cased-opening') {
+            const v = calculatedViewScale;
+            return (
+              <g key={`door-${door.id || idx}`}>
+                <rect
+                  x={50 + (doorX - 3) * v}
+                  y={30 + (doorYPos - 3) * v}
+                  width={(doorWidthInches + 6) * v}
+                  height={(doorHeight + 3) * v}
+                  fill="#fafaf7"
+                  stroke="#6b7280"
+                  strokeWidth="1"
+                />
+                <rect
+                  x={50 + doorX * v}
+                  y={30 + doorYPos * v}
+                  width={doorWidthInches * v}
+                  height={doorHeight * v}
+                  fill="#e5e7eb"
+                  stroke="#4b5563"
+                  strokeWidth="1"
+                />
+                <text
+                  x={50 + (doorX + doorWidthInches / 2) * v}
+                  y={30 + (doorYPos + doorHeight / 2) * v}
+                  textAnchor="middle"
+                  fontSize="9"
+                  fill="#374151"
+                  fontWeight="bold"
+                >
+                  OPENING
+                </text>
+                <text
+                  x={50 + (doorX + doorWidthInches / 2) * v}
+                  y={30 + (doorYPos + doorHeight + 12) * v}
+                  textAnchor="middle"
+                  fontSize="8"
+                  fill="#666"
+                >
+                  {formatInches(doorWidthInches)}
+                </text>
+              </g>
+            );
+          }
           
           // Door colors based on type
           const doorColor = door.type === 'pantry' ? '#8B4513' : 
@@ -170,7 +233,7 @@ const WallView = ({
                 fontSize="8"
                 fill="#666"
               >
-                {doorWidthInches}"
+                {formatInches(doorWidthInches)}
               </text>
             </g>
           );
@@ -180,7 +243,7 @@ const WallView = ({
       {/* Height reference line */}
       <line x1="40" y1="30" x2="40" y2={30 + wallHeight * calculatedViewScale} stroke="#333" strokeWidth="1" />
       <text x="35" y={30 + (wallHeight * calculatedViewScale) / 2} textAnchor="middle" fontSize="10" transform={`rotate(-90, 35, ${30 + (wallHeight * calculatedViewScale) / 2})`}>
-        {wallHeight}"
+        {formatInches(wallHeight)}
       </text>
 
       {/* Render each element on this wall */}
@@ -193,7 +256,9 @@ const WallView = ({
           return null;
         }
 
-        const x = wall === 1 || wall === 3 ? element.x / scale : element.y / scale;
+        const x = customWall
+          ? faceX.get(element.id)
+          : wall === 1 || wall === 3 ? element.x / scale : element.y / scale;
         const width = element.width;
         const height = element.actualHeight || elementSpec.fixedHeight;
 
@@ -204,6 +269,8 @@ const WallView = ({
 
         const isWallCabinet = element.type === 'wall' || element.type === 'medicine';
         const isSelected = element.id === selectedElement;
+        // Refrigerator cabinet: drawn as its parts, not a solid box
+        const housing = housingOf(element, elementTypes);
 
         // Keyboard access (WCAG 2.1.1): only when the page wires up a key handler
         const keyboardProps = onElementKeyDown ? {
@@ -236,6 +303,54 @@ const WallView = ({
                 <stop offset="100%" stopColor="#e0e0e0" />
               </linearGradient>
             </defs>
+            {housing ? (() => {
+              // Two side panels floor to top, the cabinet over the opening
+              // (two doors), and the open bay below it; the fridge standing
+              // in the bay is drawn by its own entry when it is on this wall
+              const vs = calculatedViewScale;
+              const left = 50 + x * vs;
+              const top = 30 + yPos * vs;
+              const W = width * vs;
+              const H = height * vs;
+              const p = Math.min(housing.sidePanel, width / 2) * vs;
+              const up = Math.min(housing.topHeight, height) * vs;
+              const bayW = Math.max(0, W - 2 * p);
+              const stroke = isSelected ? '#3b82f6' : '#6b7280';
+              const strokeWidth = isSelected ? '2' : '1';
+              const [inside] = housedElements(element, currentRoomData.elements, elementTypes, scale);
+              const insideShown = inside && wallElements.some((o) => o.id === inside.id);
+              const fridgeTop = inside ? verticalRange(inside, elementTypes).top : 0;
+              const fridgeW = inside ? Math.min(Number(inside.width) || 0, bayW / vs) * vs : 0;
+              return (
+                <g filter={`url(#cabinetShadow-${element.id})`}>
+                  {/* Open bay */}
+                  <rect x={left + p} y={top + up} width={bayW} height={Math.max(0, H - up)} fill="#f3f4f6" stroke="#9ca3af" strokeWidth="1" strokeDasharray="4,3" />
+                  {/* The fridge in the bay when its own entry is not on this wall */}
+                  {inside && !insideShown && (
+                    <g>
+                      <rect x={left + p + (bayW - fridgeW) / 2} y={30 + (wallHeight - fridgeTop) * vs} width={fridgeW} height={fridgeTop * vs} fill="#e0e0e0" stroke="#6b7280" strokeWidth="1" rx="2" />
+                      <line x1={left + p + (bayW - fridgeW) / 2} y1={30 + (wallHeight - fridgeTop * 0.4) * vs} x2={left + p + (bayW + fridgeW) / 2} y2={30 + (wallHeight - fridgeTop * 0.4) * vs} stroke="#666" strokeWidth="2" />
+                      <text x={left + W / 2} y={30 + (wallHeight - fridgeTop / 2) * vs} textAnchor="middle" fontSize="10" fill="#333" fontWeight="bold">FRIDGE</text>
+                    </g>
+                  )}
+                  {/* Side panels */}
+                  {[left, left + W - p].map((px) => (
+                    <rect key={px} x={px} y={top} width={p} height={H} fill={`url(#cabinetGradient-${element.id})`} stroke={stroke} strokeWidth={strokeWidth} />
+                  ))}
+                  {/* Cabinet over the opening, with its door line and pulls */}
+                  {up > 0 && bayW > 0 && (
+                    <>
+                      <rect x={left + p} y={top} width={bayW} height={up} fill={`url(#cabinetGradient-${element.id})`} stroke={stroke} strokeWidth={strokeWidth} />
+                      <rect x={left + p + 3} y={top + 3} width={Math.max(0, bayW - 6)} height={Math.max(0, up - 6)} fill={`url(#doorGradient-${element.id})`} stroke="#888888" strokeWidth="1" rx="1" />
+                      <line x1={left + p + bayW / 2} y1={top + 3} x2={left + p + bayW / 2} y2={top + up - 3} stroke="#4b5563" strokeWidth="1.5" />
+                      {[-1, 1].map((side) => (
+                        <rect key={side} x={left + p + bayW / 2 + side * 5 - 1.5} y={top + up - Math.min(12, up / 2)} width="3" height={Math.min(8, up / 3)} fill="#4a5568" rx="1.5" />
+                      ))}
+                    </>
+                  )}
+                </g>
+              );
+            })() : (
             <rect
               x={50 + x * calculatedViewScale}
               y={30 + yPos * calculatedViewScale}
@@ -250,6 +365,7 @@ const WallView = ({
               onMouseDown={(e) => isWallCabinet ? handleWallViewMouseDown(e, element.id) : null}
               onTouchStart={(e) => isWallCabinet ? handleWallViewMouseDown(e, element.id) : null}
             />
+            )}
 
             {/* Special rendering for sink cabinets */}
             {(element.type === 'sink-base' || element.type === 'vanity-sink') && (
@@ -1835,14 +1951,15 @@ const WallView = ({
 
             {/* Dimension labels */}
             <text x={50 + x * calculatedViewScale + (width * calculatedViewScale) / 2} y={30 + (yPos + height) * calculatedViewScale + 15} textAnchor="middle" fontSize="8" fill="#666">
-              {width}"
+              {formatInches(width)}
             </text>
 
             {/* Height labels for tall elements */}
             {(element.type === 'wall' || element.type === 'tall' || element.type === 'medicine' || element.type === 'linen' ||
-              element.type === 'medicine-mirror' || element.type === 'linen-tower' || element.type === 'vanity-tower') && (
+              element.type === 'medicine-mirror' || element.type === 'linen-tower' || element.type === 'vanity-tower' ||
+              housing) && (
                 <text x={50 + (x + width) * calculatedViewScale + 5} y={30 + (yPos + height / 2) * calculatedViewScale} textAnchor="start" fontSize="8" fill="#666">
-                  {height}"
+                  {formatInches(height)}
                 </text>
               )}
 
@@ -1867,7 +1984,7 @@ const WallView = ({
                   fontSize="7"
                   fill="#999"
                 >
-                  {element.mountHeight.toFixed(1)}"
+                  {formatInches(element.mountHeight)}
                 </text>
               </>
             )}

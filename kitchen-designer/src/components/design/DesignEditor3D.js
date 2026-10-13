@@ -3,6 +3,13 @@ import { Canvas, useThree } from '@react-three/fiber';
 import { OrbitControls, TransformControls } from '@react-three/drei';
 import * as THREE from 'three';
 import { getMaterialById, MATERIAL_TYPES, FINISHES } from '../../constants/materials';
+import { cameraSetup, clampInside, layoutFocus } from './engine3d/camera.js';
+import { enclosedSpaces, interiorWalls, pushOutOfWalls } from './engine3d/interior.js';
+import { yawFromQuaternion } from './engine3d/pose.js';
+import { housingOf } from '../../utils/designer/housing';
+import ContextRelease from '../three/studio/ContextRelease';
+import { STUDIO_DPR } from '../three/studio/canvasProps';
+import { centerFromTopLeft, normalizeRotation, topLeftFromCenter } from '../../utils/designer/rotation';
 
 // Camera controller component that exposes camera control to parent
 const CameraController = forwardRef(({ orbitControlsRef, widthInches, depthInches }, ref) => {
@@ -169,11 +176,11 @@ const Element3D = ({ element, scale, elementTypes, isSelected, onSelect, onUpdat
   const height = element.actualHeight || spec.defaultHeight || 30;
   const elevation = element.mountHeight || spec.mountHeight || 0;
   
-  // Position needs to be converted from pixels (scaled) to inches
-  // element.x is in pixels, scale is pixels/inch
-  const xInches = element.x / scale;
-  const yInches = element.y / scale;
-  
+  // element.x / y (plan px) are the top-left of the rotated footprint; the
+  // group stands at the footprint centre (inches) and turns about it, as the
+  // floor plan and the engine view do
+  const [centerX, centerZ] = centerFromTopLeft(element, element.x, element.y, scale);
+
   const rotationRad = -(element.rotation || 0) * (Math.PI / 180);
 
   // Determine if it's a base cabinet (needs countertop)
@@ -181,6 +188,9 @@ const Element3D = ({ element, scale, elementTypes, isSelected, onSelect, onUpdat
   const isAppliance = element.category === 'appliance';
   const isCorner = (element.type.toLowerCase().includes('corner') || (width === depth && width > 30)) && !isAppliance;
   const standardDepth = 24;
+  // Refrigerator cabinet: two side panels and the cabinet over the opening,
+  // no solid box, so the fridge inside it shows
+  const housing = housingOf(element, elementTypes);
 
   const handleElementClick = (e) => {
     if (interactive) {
@@ -193,11 +203,47 @@ const Element3D = ({ element, scale, elementTypes, isSelected, onSelect, onUpdat
     <>
       <group 
         ref={setElementObj}
-        position={[xInches + width / 2, elevation, yInches + depth / 2]} 
+        position={[centerX, elevation, centerZ]}
         rotation={[0, rotationRad, 0]}
       >
       {/* Main Body */}
-      {isCorner ? (
+      {housing ? (() => {
+        const panel = Math.min(housing.sidePanel, width / 2);
+        const top = Math.min(housing.topHeight, height);
+        const bay = Math.max(0, width - 2 * panel);
+        const look = (
+          <meshStandardMaterial
+            color={baseColor}
+            metalness={materialProps.metalness}
+            roughness={materialProps.roughness}
+            emissive={isSelected ? '#4a90e2' : '#000000'}
+            emissiveIntensity={isSelected ? 0.3 : 0}
+          />
+        );
+        return (
+          <group>
+            {[-(width - panel) / 2, (width - panel) / 2].map((px) => (
+              <mesh key={px} position={[px, height / 2, 0]} castShadow receiveShadow onClick={handleElementClick}>
+                <boxGeometry args={[panel, height, depth]} />
+                {look}
+              </mesh>
+            ))}
+            {top > 0 && bay > 0 && (
+              <>
+                <mesh position={[0, height - top / 2, 0]} castShadow receiveShadow onClick={handleElementClick}>
+                  <boxGeometry args={[bay, top, depth]} />
+                  {look}
+                </mesh>
+                {/* Door line on the cabinet over the opening */}
+                <mesh position={[0, height - top / 2, depth / 2 + 0.1]}>
+                  <planeGeometry args={[0.3, Math.max(0, top - 2)]} />
+                  <meshStandardMaterial color="#000" transparent opacity={0.25} />
+                </mesh>
+              </>
+            )}
+          </group>
+        );
+      })() : isCorner ? (
         <group>
             {/* Back Rect (Main width) */}
             <mesh 
@@ -277,7 +323,7 @@ const Element3D = ({ element, scale, elementTypes, isSelected, onSelect, onUpdat
         )}
 
         {/* Door/Drawer Detail for cabinets */}
-        {!isAppliance && !isCorner && (
+        {!isAppliance && !isCorner && !housing && (
           <group position={[0, height / 2, depth / 2 + 0.1]}>
               <mesh
                 onClick={handleElementClick}
@@ -306,7 +352,7 @@ const Element3D = ({ element, scale, elementTypes, isSelected, onSelect, onUpdat
         )}
         
       {/* Wireframe for definition */}
-      {!isCorner && (
+      {!isCorner && !housing && (
         <lineSegments position={[0, height / 2, 0]}>
             <edgesGeometry args={[new THREE.BoxGeometry(width, height, depth)]} />
             <lineBasicMaterial color="#000" transparent opacity={0.1} />
@@ -374,10 +420,8 @@ const Element3D = ({ element, scale, elementTypes, isSelected, onSelect, onUpdat
 
              // Real-time update for UI
              if (onTransformChange) {
-                const newRotation = -object.rotation.y * (180 / Math.PI);
-                const normalizedRotation = ((newRotation % 360) + 360) % 360;
-                onTransformChange(element.id, { 
-                    rotation: normalizedRotation,
+                onTransformChange(element.id, {
+                    rotation: normalizeRotation(-yawFromQuaternion(object.quaternion) * (180 / Math.PI)),
                     mountHeight: object.position.y
                 });
              }
@@ -387,26 +431,16 @@ const Element3D = ({ element, scale, elementTypes, isSelected, onSelect, onUpdat
              if (onUpdate && elementObj) {
                 const object = elementObj;
                 
+                // The group stands at the footprint centre (inches); the plan
+                // stores the footprint top-left (px), which moves with a turn
+                const center = [object.position.x, object.position.z];
                 if (transformMode === 'translate') {
-                    // Convert 3D position (inches) back to 2D pixels
-                    // 3D X = xInches + width/2  => xInches = 3D X - width/2
-                    // xPixels = xInches * scale
-                    const newXInches = object.position.x - width / 2;
-                    const newYInches = object.position.z - depth / 2;
-                    
-                    const newX = newXInches * scale;
-                    const newY = newYInches * scale;
-                    
-                    onUpdate(element.id, { x: newX, y: newY });
+                    onUpdate(element.id, topLeftFromCenter(element, center, element.rotation, scale));
                 } else if (transformMode === 'rotate') {
-                    // Convert 3D rotation (radians) back to degrees
-                    // rotationRad = -rotation * (PI/180)
-                    // rotation = -rotationRad * (180/PI)
-                    // We use object.rotation.y
-                    const newRotation = -object.rotation.y * (180 / Math.PI);
-                    // Normalize to 0-360
-                    const normalizedRotation = ((newRotation % 360) + 360) % 360;
-                    onUpdate(element.id, { rotation: Math.round(normalizedRotation) }); // Round to whole number
+                    // rotation.y = -degrees in radians; read the heading from
+                    // the quaternion (rotation.y alone is wrong past +-90)
+                    const rotation = normalizeRotation(Math.round(-yawFromQuaternion(object.quaternion) * (180 / Math.PI)));
+                    onUpdate(element.id, { rotation, ...topLeftFromCenter(element, center, rotation, scale) });
                 }
              }
           }}
@@ -484,6 +518,29 @@ const Door3D = ({ door, width, depth, height, scale, activeWalls, customWalls })
   };
   
   const colors = doorColors[door.type] || doorColors.standard;
+
+  // Cased opening (a pantry's doorway): casing on both faces, no leaf
+  const isCased = door.type === 'cased-opening';
+  const renderCasedOpening = (thickness) => (
+    <>
+      {[1, -1].map((face) => (
+        <group key={face} position={[0, 0, face * (thickness / 2 + 0.5)]}>
+          <mesh position={[0, doorHeightInches / 2 + 2, 0]} castShadow>
+            <boxGeometry args={[doorWidthInches + 6, 4, 1]} />
+            <meshStandardMaterial color="#f5f5f0" roughness={0.5} />
+          </mesh>
+          <mesh position={[-doorWidthInches / 2 - 2, 0, 0]} castShadow>
+            <boxGeometry args={[4, doorHeightInches + 4, 1]} />
+            <meshStandardMaterial color="#f5f5f0" roughness={0.5} />
+          </mesh>
+          <mesh position={[doorWidthInches / 2 + 2, 0, 0]} castShadow>
+            <boxGeometry args={[4, doorHeightInches + 4, 1]} />
+            <meshStandardMaterial color="#f5f5f0" roughness={0.5} />
+          </mesh>
+        </group>
+      ))}
+    </>
+  );
 
   // Render detailed door with panels, frame, and hardware
   const renderDoorDetails = () => (
@@ -607,7 +664,7 @@ const Door3D = ({ door, width, depth, height, scale, activeWalls, customWalls })
 
     return (
       <group position={doorPosition} rotation={doorRotation}>
-        {renderDoorDetails()}
+        {isCased ? renderCasedOpening(wallThickness) : renderDoorDetails()}
       </group>
     );
   } else {
@@ -634,7 +691,7 @@ const Door3D = ({ door, width, depth, height, scale, activeWalls, customWalls })
 
     return (
       <group position={[doorX, doorHeightInches / 2, doorY]} rotation={[0, -wallAngle, 0]}>
-        {renderDoorDetails()}
+        {isCased ? renderCasedOpening(customWall.thickness || wallThickness) : renderDoorDetails()}
       </group>
     );
   }
@@ -1005,17 +1062,48 @@ const DesignEditor3D = ({
   
   const orbitControlsRef = useRef();
   const internalCameraRef = useRef();
+  // where the items are when the view opens (the opening shot looks at them)
+  const [focus] = useState(() => layoutFocus(roomData?.elements, scale));
 
   if (!roomData) return null;
 
   const widthInches = parseFloat(roomData.dimensions.width) * 12;
   const depthInches = parseFloat(roomData.dimensions.height) * 12;
+  // partitions (a pantry): the opening corner avoids them and the camera
+  // stays out of their thickness (this view does not fade them; the engine
+  // view does)
+  const partitions = interiorWalls(roomData, { scale });
+  const spaces = enclosedSpaces(roomData, { walls: partitions });
+  // the camera opens inside the room and orbit/zoom/pan stop at the walls
+  const view = cameraSetup(
+    { width: widthInches, depth: depthInches, ceiling: parseFloat(roomData.dimensions.wallHeight || 96) },
+    { unit: 1, focus, walls: partitions, spaces }
+  );
+  const keepInside = (e) => {
+    const controls = e?.target;
+    if (!controls) return;
+    for (const v of [controls.object.position, controls.target]) {
+      const now = v.toArray();
+      const inside = clampInside(now, view.bounds);
+      if (inside !== now) v.fromArray(inside);
+    }
+    if (partitions.length) {
+      const p = controls.object.position;
+      const plan = [p.x, p.z];
+      const out = pushOutOfWalls(plan, partitions, { height: p.y });
+      if (out !== plan) {
+        p.x = out[0];
+        p.z = out[1];
+      }
+    }
+  };
 
   return (
-    <div className="w-full h-full bg-gray-100 relative">
+    <div className="w-full h-full bg-gray-100 relative" data-designer3d="classic">
       <Canvas
         shadows
-        camera={{ position: [widthInches * 1.5, widthInches, depthInches * 1.5], fov: 45 }}
+        dpr={[1, STUDIO_DPR]}
+        camera={{ position: view.position, fov: view.fov, near: view.near, far: view.far }}
         onPointerMissed={() => interactive && setSelectedId(null)}
         gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.1, preserveDrawingBuffer: true }}
       >
@@ -1025,8 +1113,11 @@ const DesignEditor3D = ({
         
         <OrbitControls 
           ref={orbitControlsRef}
-          target={[widthInches / 2, 0, depthInches / 2]} 
+          target={view.target}
           maxPolarAngle={Math.PI / 2} // Prevent going below floor
+          minDistance={view.minDistance}
+          maxDistance={view.maxDistance}
+          onChange={keepInside}
           enabled={true} // Controlled by TransformControls
           makeDefault
         />
@@ -1131,6 +1222,8 @@ const DesignEditor3D = ({
             />
             ))}
         </group>
+        {/* free the WebGL context as soon as the view closes */}
+        <ContextRelease />
       </Canvas>
       
       {/* Controls UI */}

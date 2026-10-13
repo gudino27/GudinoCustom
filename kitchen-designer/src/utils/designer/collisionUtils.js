@@ -1,3 +1,12 @@
+import { footprint, rotateInRoom } from './rotation.js';
+import {
+  carryHoused,
+  housedElements,
+  housingAllowsOverlap,
+  housingOf,
+  seatInHousing,
+  verticalRange,
+} from './housing.js';
 export const checkWallCollision = (x, y, width, depth, wallsArray = [], roomData = {}, rotation = 0) => {
   for (const wall of wallsArray) {
     // Only check walls that are present
@@ -125,6 +134,75 @@ export const pushAwayFromWall = (x, y, width, depth, customWalls, roomData, scal
 
   return null; // No push needed or possible
 };
+// -----------------------------
+// Overlap rule shared by every way an item gets a position: adding from the
+// sidebar, dragging, arrow keys, the properties panel and rotating.
+//
+// Two items may not share floor space, whatever their category (a dishwasher
+// cannot sit inside a refrigerator). The one exception is stacking: when one
+// item is mounted entirely above the other (a wall cabinet over a base, a
+// microwave or hood over a range, a medicine cabinet over a vanity) their
+// plan footprints may overlap. Edges that only touch (flush items, as the
+// snap code places them) are not an overlap.
+//
+// The other exception is housing (housing.js): a cabinet that declares
+// `houses: [...]` in its type (the refrigerator cabinet) may hold one
+// appliance of an accepted type when the appliance fits inside its opening.
+// -----------------------------
+
+// Footprints may overlap by this much (inches) before it counts, so flush
+// placement survives rounding in the snap and keyboard code.
+export const OVERLAP_TOLERANCE_IN = 0.5;
+
+/** Bottom and top of an element above the floor, in inches (lives in housing.js). */
+export { verticalRange };
+
+/** True when one item is mounted wholly above the other, so they may overlap in plan. */
+export const canStack = (a, b, elementTypes = {}) => {
+  const ra = verticalRange(a, elementTypes);
+  const rb = verticalRange(b, elementTypes);
+  return ra.bottom >= rb.top || rb.bottom >= ra.top;
+};
+
+/** Do two plan rectangles (top-left x, y plus width, depth) overlap by more than `tolerance`? */
+export const footprintsOverlap = (a, b, tolerance = 0) => {
+  const overlapX = Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x);
+  const overlapY = Math.min(a.y + a.depth, b.y + b.depth) - Math.max(a.y, b.y);
+  return overlapX > tolerance && overlapY > tolerance;
+};
+
+/**
+ * The first other element that `element` would overlap if its footprint's
+ * top-left sat at (x, y), or null. `size` overrides the footprint (plan px).
+ */
+export const findOverlappingElement = (
+  element,
+  x,
+  y,
+  allElements = [],
+  elementTypes = {},
+  scale = 1,
+  size = footprint(element, scale)
+) => {
+  const rect = { x, y, width: size.width, depth: size.depth };
+  const tolerance = OVERLAP_TOLERANCE_IN * scale;
+  return (
+    allElements.find((other) => {
+      if (other.id === element.id) return false;
+      if (canStack(element, other, elementTypes)) return false;
+      const fp = footprint(other, scale);
+      const overlaps = footprintsOverlap(
+        rect,
+        { x: other.x, y: other.y, width: fp.width, depth: fp.depth },
+        tolerance
+      );
+      // a fridge inside its fridge cabinet
+      return overlaps && !housingAllowsOverlap(element, { x, y }, other, allElements, elementTypes, scale);
+    }) || null
+  );
+};
+
+/** Same rule as findOverlappingElement, with the footprint size given (plan px). */
 export const checkElementCollision = (
   elementX,
   elementY,
@@ -134,57 +212,248 @@ export const checkElementCollision = (
   allElements,
   elementTypes,
   scale
-) => {
-  const overlapBuffer = 5; // Allow 5px overlap (negative means elements can touch/slightly overlap)
+) =>
+  Boolean(
+    findOverlappingElement(
+      draggedElement,
+      elementX,
+      elementY,
+      allElements,
+      elementTypes,
+      scale,
+      { width: elementWidth, depth: elementHeight }
+    )
+  );
 
-  return allElements.some(otherElement => {
-    // Skip self and non-cabinet elements
-    if (otherElement.id === draggedElement.id || otherElement.category !== 'cabinet') {
-      return false;
-    }
+/**
+ * The position updates for moving `element` to (x, y): the element itself
+ * and whatever it houses (a fridge moves with its fridge cabinet).
+ * Returns [{ id, x, y, rotation? }], the element first.
+ */
+export const moveWithHoused = (element, x, y, allElements = [], elementTypes = {}, scale = 1) => [
+  { id: element.id, x, y },
+  ...carryHoused(element, { x, y }, allElements, elementTypes, scale),
+];
 
-    // Get element specifications for height information
-    const draggedSpec = elementTypes[draggedElement.type];
-    const otherSpec = elementTypes[otherElement.type];
+/** `allElements` with position updates ([{ id, ...fields }]) applied. */
+export const applyMoves = (allElements = [], moves = []) => {
+  const byId = new Map(moves.map((m) => [m.id, m]));
+  return allElements.map((o) => (byId.has(o.id) ? { ...o, ...byId.get(o.id) } : o));
+};
 
-    if (!draggedSpec || !otherSpec) {
-      return false;
-    }
+/**
+ * Would any moved item land on another item once all `moves` are made?
+ * `ignoreIds` are left out of the check (a housed fridge sliding out of its
+ * cabinet with the arrow keys).
+ */
+export const movesOverlap = (moves, allElements = [], elementTypes = {}, scale = 1, { ignoreIds = [] } = {}) => {
+  const moved = new Set(moves.map((m) => m.id));
+  const ignored = new Set(ignoreIds);
+  const after = applyMoves(allElements, moves).filter((o) => !ignored.has(o.id));
+  return after
+    .filter((o) => moved.has(o.id))
+    .some((o) => findOverlappingElement(o, o.x, o.y, after, elementTypes, scale));
+};
 
-    // Calculate heights and mount positions
-    const draggedHeight = draggedElement.actualHeight || draggedSpec.fixedHeight || draggedSpec.defaultHeight;
-    const draggedMountHeight = draggedElement.mountHeight || draggedSpec.mountHeight || 0;
-    const draggedTopHeight = draggedMountHeight + draggedHeight;
+/**
+ * A move of `element` to (x, y) is refused when it (or what it houses, which
+ * moves with it) lands on another item. An item that already overlaps
+ * something where it is now (older saved designs) is let go, so it can be
+ * moved out of the way.
+ */
+export const isMoveBlocked = (element, x, y, allElements, elementTypes, scale) =>
+  movesOverlap(moveWithHoused(element, x, y, allElements, elementTypes, scale), allElements, elementTypes, scale) &&
+  !findOverlappingElement(element, element.x, element.y, allElements, elementTypes, scale);
 
-    const otherHeight = otherElement.actualHeight || otherSpec.fixedHeight || otherSpec.defaultHeight;
-    const otherMountHeight = otherElement.mountHeight || otherSpec.mountHeight || 0;
-    const otherTopHeight = otherMountHeight + otherHeight;
+/** The housing `element` sits in now, or null. */
+export const housingAround = (element, allElements = [], elementTypes = {}, scale = 1) =>
+  allElements.find(
+    (h) =>
+      h.id !== element.id &&
+      housingOf(h, elementTypes) &&
+      housedElements(h, allElements, elementTypes, scale).some((o) => o.id === element.id)
+  ) || null;
 
-    // Check if elements don't conflict vertically (can coexist at different heights)
-    const verticalClearance = Math.max(
-      draggedMountHeight - otherTopHeight,  // Distance from dragged bottom to other top
-      otherMountHeight - draggedTopHeight   // Distance from other bottom to dragged top
-    );
+/** Is there nothing inside `housing` but (possibly) `exceptId`? */
+const housingIsEmpty = (housing, allElements, elementTypes, scale, exceptId) =>
+  !housedElements(housing, allElements, elementTypes, scale).some((o) => o.id !== exceptId);
 
-    // If there's sufficient vertical clearance (>= 3 inches), allow horizontal overlap
-    if (verticalClearance >= 3) {
-      return false; // No collision - elements at different heights
-    }
+/**
+ * Dragging an appliance over a cabinet that houses its type: the seat in
+ * that cabinet (centred in the opening, flush with the back, turned to face
+ * the same way) when the appliance's centre at (x, y) is over the cabinet,
+ * the cabinet is empty and the seat is free. { x, y, rotation, housingId } or null.
+ */
+export const snapIntoHousing = (element, x, y, allElements = [], elementTypes = {}, scale = 1) => {
+  const fp = footprint(element, scale);
+  const cx = x + fp.width / 2;
+  const cy = y + fp.depth / 2;
+  for (const housing of allElements) {
+    if (housing.id === element.id || !housingOf(housing, elementTypes)) continue;
+    const hfp = footprint(housing, scale);
+    const over = cx >= housing.x && cx <= housing.x + hfp.width && cy >= housing.y && cy <= housing.y + hfp.depth;
+    if (!over) continue;
+    if (!housingIsEmpty(housing, allElements, elementTypes, scale, element.id)) continue;
+    const seat = seatInHousing(element, housing, elementTypes, scale);
+    if (!seat) continue;
+    const seated = { ...element, rotation: seat.rotation };
+    if (findOverlappingElement(seated, seat.x, seat.y, allElements, elementTypes, scale)) continue;
+    return { ...seat, housingId: housing.id };
+  }
+  return null;
+};
 
-    // Calculate other element's dimensions based on rotation
-    const otherWidth = (otherElement.rotation === 0 || otherElement.rotation === 180) ? otherElement.width * scale : otherElement.depth * scale;
-    const otherDepth = (otherElement.rotation === 0 || otherElement.rotation === 180) ? otherElement.depth * scale : otherElement.width * scale;
+/**
+ * Adding an appliance: a free seat in the first empty cabinet that houses
+ * its type, or null (then the normal free-spot search runs).
+ */
+export const seatInEmptyHousing = (element, allElements = [], elementTypes = {}, scale = 1) => {
+  for (const housing of allElements) {
+    if (housing.id === element.id || !housingOf(housing, elementTypes)) continue;
+    if (!housingIsEmpty(housing, allElements, elementTypes, scale, element.id)) continue;
+    const seat = seatInHousing(element, housing, elementTypes, scale);
+    if (!seat) continue;
+    const seated = { ...element, rotation: seat.rotation };
+    if (findOverlappingElement(seated, seat.x, seat.y, allElements, elementTypes, scale)) continue;
+    return { ...seat, housingId: housing.id };
+  }
+  return null;
+};
 
-    // AABB collision detection with overlap buffer
-    const collision = !(
-      elementX + elementWidth < otherElement.x + overlapBuffer ||
-      elementX > otherElement.x + otherWidth - overlapBuffer ||
-      elementY + elementHeight < otherElement.y + overlapBuffer ||
-      elementY > otherElement.y + otherDepth - overlapBuffer
-    );
-
-    return collision;
+// Positions along one axis, 0..max: every `step` plus the spots that sit
+// flush against another item's edges.
+const axisStops = (max, step, flush) => {
+  const stops = new Set();
+  for (let v = 0; v < max; v += step) stops.add(v);
+  stops.add(Math.max(0, max));
+  flush.forEach((v) => {
+    if (v >= 0 && v <= max) stops.add(v);
   });
+  return [...stops];
+};
+
+/**
+ * Nearest spot inside the room where `element` (footprint after rotation)
+ * overlaps nothing.
+ *
+ * @param {Object} element   { id, type, width, depth, rotation, mountHeight, ... }
+ * @param {Array}  allElements
+ * @param {Object} elementTypes
+ * @param {number} scale     plan px per inch
+ * @param {Object} options
+ *   room        { width, depth } in plan px (required)
+ *   preferred   { x, y } spot to try first and measure distance from
+ *   walls       room walls present (1 top, 2 right, 3 bottom, 4 left)
+ *   wallsFirst  look along the walls before the open floor (default true)
+ *   maxDistance give up on spots further than this from `preferred` (px)
+ *   isBlocked   (x, y, width, depth) => bool, extra rule (door clearance)
+ * @returns {{ x: number, y: number } | null}
+ */
+export const findFreePosition = (
+  element,
+  allElements = [],
+  elementTypes = {},
+  scale = 1,
+  {
+    room,
+    preferred = { x: 0, y: 0 },
+    walls = [1, 2, 3, 4],
+    wallsFirst = true,
+    maxDistance = Infinity,
+    isBlocked,
+  } = {}
+) => {
+  const { width, depth } = footprint(element, scale);
+  const maxX = room.width - width;
+  const maxY = room.depth - depth;
+  if (maxX < 0 || maxY < 0) return null; // bigger than the room
+
+  const isFree = (p) =>
+    !findOverlappingElement(element, p.x, p.y, allElements, elementTypes, scale) &&
+    !(isBlocked && isBlocked(p.x, p.y, width, depth));
+
+  const clamp = (v, max) => Math.max(0, Math.min(v, max));
+  const start = { x: clamp(preferred.x, maxX), y: clamp(preferred.y, maxY) };
+  if (isFree(start)) return start;
+
+  const others = allElements
+    .filter((o) => o.id !== element.id)
+    .map((o) => ({ ...o, fp: footprint(o, scale) }));
+  const step = scale; // one inch
+  const xs = axisStops(maxX, step, others.flatMap((o) => [o.x + o.fp.width, o.x - width]));
+  const ys = axisStops(maxY, step, others.flatMap((o) => [o.y + o.fp.depth, o.y - depth]));
+
+  const alongWalls = [];
+  if (walls.includes(1)) xs.forEach((x) => alongWalls.push({ x, y: 0 }));
+  if (walls.includes(2)) ys.forEach((y) => alongWalls.push({ x: maxX, y }));
+  if (walls.includes(3)) xs.forEach((x) => alongWalls.push({ x, y: maxY }));
+  if (walls.includes(4)) ys.forEach((y) => alongWalls.push({ x: 0, y }));
+  const openFloor = [];
+  ys.forEach((y) => xs.forEach((x) => openFloor.push({ x, y })));
+
+  const nearestFree = (spots) =>
+    spots
+      .map((p) => ({ ...p, d: Math.hypot(p.x - start.x, p.y - start.y) }))
+      .filter((p) => p.d <= maxDistance)
+      .sort((a, b) => a.d - b.d)
+      .find(isFree);
+
+  const tiers = wallsFirst ? [alongWalls, openFloor] : [[...alongWalls, ...openFloor]];
+  for (const spots of tiers) {
+    const hit = nearestFree(spots);
+    if (hit) return { x: hit.x, y: hit.y };
+  }
+  return null;
+};
+
+/**
+ * Rotate `element` in place (about its centre, kept in the room) without
+ * landing on another item: if the turned footprint overlaps something, it is
+ * nudged to the nearest free spot within one item length. Returns the
+ * { rotation, x, y } update, or null when there is no room to turn.
+ */
+export const rotateWithoutOverlap = (element, angle, room, allElements, elementTypes, scale = 1) => {
+  const turned = rotateInRoom(element, angle, room, scale);
+  const candidate = { ...element, ...turned };
+  const lands = findOverlappingElement(candidate, turned.x, turned.y, allElements, elementTypes, scale);
+  // already overlapping before the turn (older saved designs): let it turn
+  const alreadyOverlapping = findOverlappingElement(element, element.x, element.y, allElements, elementTypes, scale);
+  if (!lands || alreadyOverlapping) return turned;
+  const size = footprint(candidate, scale);
+  const spot = findFreePosition(candidate, allElements, elementTypes, scale, {
+    room,
+    preferred: { x: turned.x, y: turned.y },
+    wallsFirst: false,
+    maxDistance: Math.max(size.width, size.depth),
+  });
+  return spot ? { rotation: turned.rotation, x: spot.x, y: spot.y } : null;
+};
+
+/**
+ * rotateWithoutOverlap for an item and what it houses: a fridge cabinet turns
+ * with its fridge re-seated inside. Returns [{ id, rotation, x, y }] (the
+ * element first) or null when there is no room to turn. A cabinet with
+ * something inside is not nudged: it turns in place or not at all.
+ */
+export const rotateWithHoused = (element, angle, room, allElements, elementTypes, scale = 1) => {
+  const inside = housedElements(element, allElements, elementTypes, scale);
+  if (inside.length === 0) {
+    const turned = rotateWithoutOverlap(element, angle, room, allElements, elementTypes, scale);
+    return turned ? [{ id: element.id, ...turned }] : null;
+  }
+  const turned = rotateInRoom(element, angle, room, scale);
+  const moves = [
+    { id: element.id, ...turned },
+    ...carryHoused(element, turned, allElements, elementTypes, scale),
+  ];
+  const alreadyOverlapping = movesOverlap(
+    [{ id: element.id, x: element.x, y: element.y }],
+    allElements,
+    elementTypes,
+    scale
+  );
+  if (!alreadyOverlapping && movesOverlap(moves, allElements, elementTypes, scale)) return null;
+  return moves;
 };
 export const checkRotatedRectCollision = (
   ax, ay, aWidth, aHeight, aRotation,

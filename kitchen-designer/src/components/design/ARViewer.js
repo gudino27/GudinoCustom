@@ -1,8 +1,13 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { X, Smartphone, RotateCcw, Loader2, AlertCircle, Camera } from 'lucide-react';
-import ARSceneExporter from './ARSceneExporter';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { FINISHES, getMaterialById } from '../../constants/materials';
+import { engineRendererEnabled } from './engine3d/rendererFlag.js';
 import '../css/designer.css';
+
+// The classic exporter (its own three.js canvas) and model-viewer (~1 MB)
+// load only when the AR dialog opens, never with the designer page.
+const ARSceneExporter = React.lazy(() => import('./ARSceneExporter'));
 
 // Import model-viewer web component (needs to be registered)
 // This will be loaded dynamically to avoid SSR issues
@@ -31,6 +36,12 @@ const ARViewer = ({
   const modelViewerRef = useRef(null);
   const dialogRef = useRef(null);
   const { t } = useLanguage();
+  // With the engine renderer switched on, the AR model comes from the cabinet
+  // engine (the kitchen the engine 3D view shows); the classic exporter is the
+  // fallback if that fails.
+  const [engineAR] = useState(() => engineRendererEnabled());
+  const [engineARFailed, setEngineARFailed] = useState(false);
+  const exportCompleteRef = useRef(null);
 
   // Native <dialog>: inert background, Escape to close and focus returned to
   // the button that opened it, all handled by the browser (WCAG 2.4.3, 4.1.2)
@@ -46,10 +57,10 @@ const ARViewer = ({
     else onClose();
   };
 
-  // Load model-viewer component on mount
+  // Load the model-viewer component the first time the dialog opens
   useEffect(() => {
-    loadModelViewer();
-  }, []);
+    if (isOpen) loadModelViewer();
+  }, [isOpen]);
 
   // Check AR support
   useEffect(() => {
@@ -105,6 +116,35 @@ const ARViewer = ({
     setModelUrl(url);
   };
 
+  exportCompleteRef.current = handleExportComplete;
+
+  // Engine export: a plain async call, no canvas
+  useEffect(() => {
+    if (!isOpen || !isExporting || !engineAR || engineARFailed || !roomData) return undefined;
+    let cancelled = false;
+    import('./engine3d/arExport.js')
+      .then(({ exportEngineGLB }) => exportEngineGLB(roomData, {
+        elementTypes,
+        roomType: activeRoom,
+        scale,
+        finishes: FINISHES,
+        lookup: getMaterialById,
+      }))
+      .then(({ blob, bytes, notes }) => {
+        if (cancelled) return;
+        if (process.env.NODE_ENV !== 'production') {
+          console.info(`[ARViewer] engine GLB: ${(bytes / 1024).toFixed(0)} KB`, notes.length ? notes : '');
+        }
+        exportCompleteRef.current(blob);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.error('[ARViewer] engine export failed; using the classic exporter.', err);
+        setEngineARFailed(true);
+      });
+    return () => { cancelled = true; };
+  }, [isOpen, isExporting, engineAR, engineARFailed, roomData, elementTypes, activeRoom, scale]);
+
   // Handle regenerating the model
   const handleRegenerate = () => {
     if (modelUrl) {
@@ -156,13 +196,17 @@ const ARViewer = ({
           {/* Export in progress */}
           {isExporting && !modelUrl && (
             <>
-              {/* Hidden exporter component */}
-              <ARSceneExporter
-                roomData={roomData}
-                elementTypes={elementTypes}
-                scale={scale}
-                onExport={handleExportComplete}
-              />
+              {/* Hidden exporter component (classic path) */}
+              {(!engineAR || engineARFailed) && (
+                <Suspense fallback={null}>
+                  <ARSceneExporter
+                    roomData={roomData}
+                    elementTypes={elementTypes}
+                    scale={scale}
+                    onExport={handleExportComplete}
+                  />
+                </Suspense>
+              )}
               
               {/* Loading UI */}
               <div className="flex flex-col items-center justify-center py-8" role="status">

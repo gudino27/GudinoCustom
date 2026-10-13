@@ -2,11 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import LanguageSelector from './LanguageSelector';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { splitLanguagePath } from '../../seo/site';
 import '../css/navigation.css';
 
 const Navigation = () => {
     const location = useLocation();
-    const { t } = useLanguage();
+    const { t, localizedPath: lp } = useLanguage();
     const [isNavCollapsed, setIsNavCollapsed] = useState(true);
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [showroomVisible, setShowroomVisible] = useState(false);
@@ -68,9 +69,11 @@ const Navigation = () => {
     }, [isDropdownOpen]);
 
     // Helper function to determine if a link is active
+    // compared without the /es prefix, so /es/about is "About" too
     const isActive = (path) => {
-        if (path === '/' && location.pathname === '/') return true;
-        if (path !== '/' && location.pathname.includes(path)) return true;
+        const { basePath } = splitLanguagePath(location.pathname);
+        if (path === '/' && basePath === '/') return true;
+        if (path !== '/' && basePath.includes(path)) return true;
         return false;
     };
 
@@ -94,7 +97,7 @@ const Navigation = () => {
         {/* First focusable element on every page, so keyboard users can jump the nav */}
         <a className="skip-link" href="#main-content">{t('a11y.skipToContent')}</a>
         <nav className="navbar navbar-expand-lg" id="main-nav" aria-label={t('nav.primary')}>
-            <Link className={`navbar-brand ${isActive('/') ? 'active' : ''}`} to="/" aria-current={currentPage('/')}>
+            <Link className={`navbar-brand ${isActive('/') ? 'active' : ''}`} to={lp("/")} aria-current={currentPage('/')}>
                 <img src="/O.png" alt={t('nav.home')} width="250" height="60" />
             </Link>
 
@@ -111,25 +114,25 @@ const Navigation = () => {
 
             <div className={`collapse navbar-collapse ${isNavCollapsed ? '' : 'show'}`} id="navbarNav">
                 <div className="navbar-nav ms-auto">
-                    <Link className={`nav-link text-white ${isActive('/portfolio') ? 'active' : ''}`} to="/portfolio" onClick={handleNavCollapse} aria-current={currentPage('/portfolio')}>
+                    <Link className={`nav-link text-white ${isActive('/portfolio') ? 'active' : ''}`} to={lp("/portfolio")} onClick={handleNavCollapse} aria-current={currentPage('/portfolio')}>
                         <p>{t('nav.portfolio')}</p>
                     </Link>
-                    <Link className={`nav-link text-white ${isActive('/design') ? 'active' : ''}`} to="/design" onClick={handleNavCollapse} aria-current={currentPage('/design')}>
+                    <Link className={`nav-link text-white ${isActive('/design') ? 'active' : ''}`} to={lp("/design")} onClick={handleNavCollapse} aria-current={currentPage('/design')}>
                         <p>{t('nav.design')}</p>
                     </Link>
                     {showroomVisible && (
-                        <Link className={`nav-link text-white ${isActive('/showroom') ? 'active' : ''}`} to="/showroom" onClick={handleNavCollapse} aria-current={currentPage('/showroom')}>
+                        <Link className={`nav-link text-white ${isActive('/showroom') ? 'active' : ''}`} to={lp("/showroom")} onClick={handleNavCollapse} aria-current={currentPage('/showroom')}>
                             <p>{t('nav.showroom')}</p>
                         </Link>
                     )}
-                    <Link className={`nav-link text-white ${isActive('/about') ? 'active' : ''}`} to="/about" onClick={handleNavCollapse} aria-current={currentPage('/about')}>
+                    <Link className={`nav-link text-white ${isActive('/about') ? 'active' : ''}`} to={lp("/about")} onClick={handleNavCollapse} aria-current={currentPage('/about')}>
                         <p>{t('nav.about')}</p>
                     </Link>
-                    <Link className={`nav-link text-white ${isActive('/contact') ? 'active' : ''}`} to="/contact" onClick={handleNavCollapse} aria-current={currentPage('/contact')}>
+                    <Link className={`nav-link text-white ${isActive('/contact') ? 'active' : ''}`} to={lp("/contact")} onClick={handleNavCollapse} aria-current={currentPage('/contact')}>
                         <p>{t('nav.contact')}</p>
                     </Link>
 
-                    <div className={`nav-item dropdown ${isActive('/cabinet-care') || isActive('/why-choose-us') || isActive('/book-appointment') || isActive('/hardware-catalog') ? 'active' : ''} ${isDropdownOpen ? 'show' : ''}`} style={{paddingRight:'30px'}}>
+                    <div className={`nav-item dropdown ${isActive('/cabinet-care') || isActive('/why-choose-us') || isActive('/book-appointment') || isActive('/hardware-catalog') || isActive('/faq') ? 'active' : ''} ${isDropdownOpen ? 'show' : ''}`} style={{paddingRight:'30px'}}>
                         <button
                             className="nav-link dropdown-toggle text-white mx-3"
                             type="button"
@@ -142,23 +145,28 @@ const Navigation = () => {
                         </button>
                         <ul className={`dropdown-menu ${isDropdownOpen ? 'show' : ''}`} id="cabinet101-menu" style={{marginLeft:'40px'}}>
                             <li>
-                                <Link className="dropdown-item text-left" to="/cabinet-care" onClick={closeDropdown} aria-current={currentPage('/cabinet-care')} style={{border:"1px solid #ffffff8a",textAlign:"center"}}>
+                                <Link className="dropdown-item text-left" to={lp("/cabinet-care")} onClick={closeDropdown} aria-current={currentPage('/cabinet-care')} style={{border:"1px solid #ffffff8a",textAlign:"center"}}>
                                     {t('footer.cabinetCare')}
                                 </Link>
                             </li>
                             <li>
-                                <Link className="dropdown-item text-center" to="/hardware-catalog" onClick={closeDropdown} aria-current={currentPage('/hardware-catalog')} style={{border:"1px solid #ffffff8a",textAlign:"center"}}>
+                                <Link className="dropdown-item text-center" to={lp("/hardware-catalog")} onClick={closeDropdown} aria-current={currentPage('/hardware-catalog')} style={{border:"1px solid #ffffff8a",textAlign:"center"}}>
                                     {t('nav.hardwareCatalog')}
                                 </Link>
                             </li>
                             <li>
-                                <Link className="dropdown-item text-center" to="/why-choose-us" onClick={closeDropdown} aria-current={currentPage('/why-choose-us')} style={{border:"1px solid #ffffff8a",textAlign:"center"}}>
+                                <Link className="dropdown-item text-center" to={lp("/why-choose-us")} onClick={closeDropdown} aria-current={currentPage('/why-choose-us')} style={{border:"1px solid #ffffff8a",textAlign:"center"}}>
                                     {t('nav.whyChooseUs')}
                                 </Link>
                             </li>
                             <li>
-                                <Link className="dropdown-item text-center" to="/book-appointment" onClick={closeDropdown} aria-current={currentPage('/book-appointment')} style={{border:"1px solid #ffffff8a",textAlign:"center"}}>
+                                <Link className="dropdown-item text-center" to={lp("/book-appointment")} onClick={closeDropdown} aria-current={currentPage('/book-appointment')} style={{border:"1px solid #ffffff8a",textAlign:"center"}}>
                                     {t('nav.bookAppointment')}
+                                </Link>
+                            </li>
+                            <li>
+                                <Link className="dropdown-item text-center" to={lp("/faq")} onClick={closeDropdown} aria-current={currentPage('/faq')} style={{border:"1px solid #ffffff8a",textAlign:"center"}}>
+                                    {t('nav.faq')}
                                 </Link>
                             </li>
                         </ul>

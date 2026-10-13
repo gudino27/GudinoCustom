@@ -90,3 +90,4 @@ data/geolite2/README.md
 data/geolite2/GeoLite2-City_20251219/GeoLite2-City_20251219/GeoLite2-City.mmdb
 data/geolite2/GeoLite2-City_20251219/GeoLite2-City_20251219/README.txt
 3dvistademo/*
+kitchen-designer/tests/*

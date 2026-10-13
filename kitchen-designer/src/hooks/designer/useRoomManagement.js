@@ -1,3 +1,5 @@
+import { fitPlanScale, roomAtScale } from '../../utils/designer/roomScale';
+
 // Allowed room sizes, shown as hint text and checked on submit (WCAG 3.3.1/3.3.3)
 export const DIMENSION_LIMITS = {
   width: { min: 5, max: 50 },
@@ -43,13 +45,10 @@ export const useRoomManagement = ({
     }
 
     // Calculate optimal canvas scale based on room size
-    const widthInches = parseFloat(dims.width) * 12;
-    const heightInches = parseFloat(dims.height) * 12;
-    const maxCanvasSize = 600;
-    const newScale = Math.min(
-      maxCanvasSize / widthInches,
-      maxCanvasSize / heightInches
-    );
+    const newScale = fitPlanScale(dims);
+    const setRoom = activeRoom === "kitchen" ? setKitchenData : setBathroomData;
+    const next = roomAtScale(currentRoomData, newScale);
+    if (next !== currentRoomData) setRoom(next);
     setScale(newScale);
     setStep("design"); // Move to design interface
     return { ok: true };
@@ -87,13 +86,11 @@ export const useRoomManagement = ({
       setStep("dimensions");
     } else {
       // Room has dimensions, update canvas scale and stay in design step
-      const widthInches = parseFloat(roomData.dimensions.width) * 12;
-      const heightInches = parseFloat(roomData.dimensions.height) * 12;
-      const maxCanvasSize = 600;
-      const newScale = Math.min(
-        maxCanvasSize / widthInches,
-        maxCanvasSize / heightInches
-      );
+      const newScale = fitPlanScale(roomData.dimensions);
+      const next = roomAtScale(roomData, newScale);
+      if (next !== roomData) {
+        (room === "kitchen" ? setKitchenData : setBathroomData)(next);
+      }
       setScale(newScale);
       // Ensure we're on design step if room has dimensions
       if (step !== "design") {

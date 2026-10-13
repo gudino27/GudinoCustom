@@ -20,7 +20,7 @@ const Collapsible = ({ title, children, defaultOpen = false, headingLevel = 2 })
           type="button"
           onClick={toggleOpen}
           aria-expanded={isOpen}
-          aria-controls={isOpen ? contentId : undefined}
+          aria-controls={contentId}
         >
           <span className="collapsible-title sms-section-header text-center">
             {title}
@@ -32,11 +32,14 @@ const Collapsible = ({ title, children, defaultOpen = false, headingLevel = 2 })
           />
         </button>
       </Heading>
-      {isOpen && (
-        <div id={contentId} className="collapsible-content">
-          {children}
-        </div>
-      )}
+      {/* Closed sections stay in the page, hidden, rather than unmounted:
+          `hidden` keeps them out of sight and out of the accessibility tree
+          exactly as before, while search engines and AI assistants that read
+          the rendered page still find the text (Cabinet Care, Why Choose Us,
+          the policies). */}
+      <div id={contentId} className="collapsible-content" hidden={!isOpen}>
+        {children}
+      </div>
     </div>
   );
 };

@@ -15,6 +15,8 @@ const CategorySelector = ({
   return (
     <div className="category-container">
       <h1 className="portfolio-heading">{t("portfolio.heading")}</h1>
+      {/* a sentence under the heading tells visitors and search engines what the gallery holds */}
+      <p className="text-white mb-4">{t("portfolio.intro")}</p>
       <h2 id="portfolio-category-heading" className="text-white mb-4">{t("portfolio.selectCategory")}</h2>
       <div className="category-buttons" role="group" aria-labelledby="portfolio-category-heading">
         {categories.map((cat) => (

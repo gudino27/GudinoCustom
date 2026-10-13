@@ -1,10 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
-import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
-import { EffectComposer, N8AO, SMAA, ToneMapping } from '@react-three/postprocessing'
-import { ToneMappingMode } from 'postprocessing'
+import {
+  ContextRelease,
+  IN,
+  STUDIO_LOW,
+  studioCanvasProps,
+  StudioEnvironment,
+  StudioLighting,
+  StudioEffects,
+  ExteriorView,
+  getTextures,
+  applyMaterialLook,
+  castsShadow,
+  adoptEnvironment,
+} from '../three/studio'
 import { useLanguage } from '../../contexts/LanguageContext'
 import usePrefersReducedMotion from '../../hooks/usePrefersReducedMotion'
 
@@ -16,7 +27,30 @@ import usePrefersReducedMotion from '../../hooks/usePrefersReducedMotion'
 //   build_group  : room | base | counter | upper | tall | appliance | island | trim
 const MODEL_URL = `${process.env.PUBLIC_URL || ''}/models/kitchen.glb`
 
-const IN = 0.0254
+// The GLB is fetched and parsed once per page load: the canvas unmounts when
+// the section is far off screen (to free the GPU) and a remount clones the
+// cached scene instead of downloading and parsing it again.
+let gltfPromise = null
+function loadKitchenGLB() {
+  if (!gltfPromise) {
+    gltfPromise = new Promise((resolve, reject) => {
+      new GLTFLoader().load(MODEL_URL, resolve, undefined, reject)
+    }).catch((err) => {
+      gltfPromise = null
+      throw err
+    })
+  }
+  return gltfPromise
+}
+
+// Unmount the canvas once the section is this many viewport heights past
+// the edge of the screen, and mount it again when it comes back within
+// REMOUNT_VIEWPORTS (the gap keeps a scroll at the edge from flapping; the
+// remount happens well before the canvas can be seen, so the first frame is
+// drawn off screen and nothing pops in).
+const UNMOUNT_VIEWPORTS = 2
+const REMOUNT_VIEWPORTS = 1.5
+
 // The builder's plan coordinates survive the glTF axis conversion intact:
 // three.js (x, y, z) = (plan east, height, plan south) in inches.
 const at = (east, south, up) => [east * IN, up * IN, south * IN]
@@ -24,16 +58,10 @@ const at = (east, south, up) => [east * IN, up * IN, south * IN]
 const TRAVEL = 0.26 // metres each part moves into place
 
 // Phones and small tablets get smaller shadow maps and cheaper AO.
-const LOW = typeof window !== 'undefined' && window.innerWidth < 820
-
-// Passed as <Canvas shadows>. R3F re-applies this on every render of the
-// Canvas and sets shadowMap.enabled from it, so switching shadows on inside a
-// component is undone the first time the caption changes — which is how the
-// scene ended up rendering with no shadows at all.
-//   PCF (not PCFSoft) honours shadow.radius, so each light sets its own
-//   penumbra; the maps are redrawn on demand (KitchenModel flags it), not
-//   every frame, since the scene only changes while parts move.
-const SHADOWS = { type: THREE.PCFShadowMap, autoUpdate: false }
+const LOW = STUDIO_LOW
+// shadows (see STUDIO_SHADOWS), dpr and the renderer options every studio
+// canvas shares
+const CANVAS_PROPS = studioCanvasProps({ low: LOW })
 
 // Each run builds while its own transparent gap holds the screen. The gap
 // positions depend on viewport height and on how the content reflows, so they
@@ -204,271 +232,6 @@ function cameraClear(v) {
   return true
 }
 
-// ---------------------------------------------------------------------------
-// procedural textures — the GLB ships flat colours and metre-scale box UVs, so
-// one canvas texture per material reads at a consistent size across the room.
-// ---------------------------------------------------------------------------
-function graniteTexture() {
-  const s = 1024
-  const c = document.createElement('canvas')
-  c.width = c.height = s
-  const x = c.getContext('2d')
-  x.fillStyle = '#d9d9d4'
-  x.fillRect(0, 0, s, s)
-
-  // soft mineral blotches
-  for (let i = 0; i < 300; i += 1) {
-    const cx = Math.random() * s
-    const cy = Math.random() * s
-    const r = Math.random() * 60 + 18
-    const g = x.createRadialGradient(cx, cy, 0, cx, cy, r)
-    const dark = Math.random() < 0.45
-    g.addColorStop(0, dark ? 'rgba(84,84,88,0.30)' : 'rgba(250,250,248,0.34)')
-    g.addColorStop(1, 'rgba(255,255,255,0)')
-    x.fillStyle = g
-    x.beginPath()
-    x.arc(cx, cy, r, 0, Math.PI * 2)
-    x.fill()
-  }
-
-  // the dense black / white speckle that gives the stone its grain
-  for (let i = 0; i < 46000; i += 1) {
-    const r = Math.random()
-    if (r < 0.34) x.fillStyle = `rgba(28,28,32,${Math.random() * 0.75 + 0.2})`
-    else if (r < 0.62) x.fillStyle = `rgba(252,252,250,${Math.random() * 0.8 + 0.2})`
-    else if (r < 0.85) x.fillStyle = `rgba(126,128,132,${Math.random() * 0.5 + 0.15})`
-    else x.fillStyle = `rgba(150,136,118,${Math.random() * 0.35 + 0.1})`
-    const w = Math.random() * 3.4 + 0.7
-    x.fillRect(Math.random() * s, Math.random() * s, w, w * (Math.random() * 0.8 + 0.5))
-  }
-
-  // faint veining
-  for (let i = 0; i < 7; i += 1) {
-    x.strokeStyle = `rgba(96,96,102,${Math.random() * 0.12 + 0.05})`
-    x.lineWidth = Math.random() * 5 + 1.5
-    x.beginPath()
-    let px = -30
-    let py = Math.random() * s
-    x.moveTo(px, py)
-    while (px < s) {
-      px += 70 + Math.random() * 90
-      py += (Math.random() - 0.5) * 150
-      x.lineTo(px, py)
-    }
-    x.stroke()
-  }
-
-  const tex = new THREE.CanvasTexture(c)
-  tex.colorSpace = THREE.SRGBColorSpace
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping
-  tex.repeat.set(0.85, 0.85) // UVs are metres; one tile ≈ 1.2 m of slab
-  tex.anisotropy = 8
-  return tex
-}
-
-function oakTexture() {
-  const s = 1024
-  const c = document.createElement('canvas')
-  c.width = c.height = s
-  const x = c.getContext('2d')
-  x.fillStyle = '#e3c684'
-  x.fillRect(0, 0, s, s)
-
-  const plank = 146 // ≈ 7" boards at one tile per 1.2 m
-  for (let row = 0; row * plank < s; row += 1) {
-    const y = row * plank
-    const t = (Math.random() - 0.5) * 26
-    x.fillStyle = `rgb(${226 + t},${197 + t * 0.7},${132 + t * 0.5})`
-    x.fillRect(0, y, s, plank - 2)
-    for (let i = 0; i < 90; i += 1) {
-      x.strokeStyle = `rgba(150,110,60,${Math.random() * 0.09 + 0.02})`
-      x.lineWidth = Math.random() * 1.5 + 0.2
-      const ly = y + Math.random() * plank
-      x.beginPath()
-      x.moveTo(0, ly)
-      for (let xx = 0; xx <= s; xx += 40) x.lineTo(xx, ly + Math.sin(xx * 0.017 + row) * 1.8)
-      x.stroke()
-    }
-    x.strokeStyle = 'rgba(126,92,46,0.55)'
-    x.lineWidth = 2.2
-    x.beginPath()
-    x.moveTo(0, y)
-    x.lineTo(s, y)
-    x.stroke()
-    // staggered end joints
-    const seam = Math.random() * s
-    x.beginPath()
-    x.moveTo(seam, y)
-    x.lineTo(seam, y + plank - 2)
-    x.stroke()
-  }
-
-  const tex = new THREE.CanvasTexture(c)
-  tex.colorSpace = THREE.SRGBColorSpace
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping
-  tex.repeat.set(0.82, 0.82)
-  tex.anisotropy = 8
-  return tex
-}
-
-function woodTexture(base, grain) {
-  const s = 512
-  const c = document.createElement('canvas')
-  c.width = c.height = s
-  const x = c.getContext('2d')
-  x.fillStyle = base
-  x.fillRect(0, 0, s, s)
-  for (let i = 0; i < 200; i += 1) {
-    x.strokeStyle = `${grain}${Math.floor(Math.random() * 30 + 8).toString(16).padStart(2, '0')}`
-    x.lineWidth = Math.random() * 2.4 + 0.3
-    x.beginPath()
-    const p0 = Math.random() * s
-    x.moveTo(0, p0)
-    for (let xx = 0; xx <= s; xx += 26) x.lineTo(xx, p0 + Math.sin(xx * 0.02 + i) * 3)
-    x.stroke()
-  }
-  const tex = new THREE.CanvasTexture(c)
-  tex.colorSpace = THREE.SRGBColorSpace
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping
-  tex.repeat.set(1.2, 1.2)
-  return tex
-}
-
-// A faint blotch map. Used as a roughnessMap it stops painted doors reading as
-// one flat plastic sheet — highlights break up the way real lacquer does.
-function sheenTexture() {
-  const s = 512
-  const c = document.createElement('canvas')
-  c.width = c.height = s
-  const x = c.getContext('2d')
-  x.fillStyle = '#d8d8d8'
-  x.fillRect(0, 0, s, s)
-  for (let i = 0; i < 240; i += 1) {
-    const cx = Math.random() * s
-    const cy = Math.random() * s
-    const r = Math.random() * 90 + 25
-    const g = x.createRadialGradient(cx, cy, 0, cx, cy, r)
-    const v = Math.random() < 0.5 ? 255 : 180
-    g.addColorStop(0, `rgba(${v},${v},${v},0.14)`)
-    g.addColorStop(1, 'rgba(0,0,0,0)')
-    x.fillStyle = g
-    x.beginPath()
-    x.arc(cx, cy, r, 0, Math.PI * 2)
-    x.fill()
-  }
-  const tex = new THREE.CanvasTexture(c)
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping
-  tex.repeat.set(1.5, 1.5)
-  return tex
-}
-
-let _TEX = null
-function getTextures() {
-  if (!_TEX) {
-    _TEX = {
-      granite: graniteTexture(),
-      oak: oakTexture(),
-      beam: woodTexture('#6f4a2b', '#3a2412'),
-      sheen: sheenTexture(),
-    }
-  }
-  return _TEX
-}
-
-// ---------------------------------------------------------------------------
-// Give each GLB material its finish. Names are set in build_kitchen.py.
-// ---------------------------------------------------------------------------
-function applyMaterialLook(m, tex) {
-  if (!m || m.userData.__styled) return
-  m.userData.__styled = true
-  const name = (m.name || '').toLowerCase()
-
-  // envMapIntensity only counts when a material carries its own envMap —
-  // otherwise three uses scene.environmentIntensity. The shiny finishes are
-  // flagged here and handed the environment once it exists (KitchenModel).
-  if (/^(granite|stainless|metal|glass|cast_iron)/.test(name)) m.userData.ownEnv = true
-
-  if (name.startsWith('granite')) {
-    m.map = tex.granite
-    m.color.setRGB(1, 1, 1)
-    m.roughness = 0.22
-    m.metalness = 0.0
-    m.envMapIntensity = 0.65
-  } else if (name.startsWith('oak')) {
-    m.map = tex.oak
-    // honey oak — at full white the texture read as a pale yellow sheet
-    m.color.setRGB(0.8, 0.74, 0.66)
-    m.roughness = 0.62
-    m.envMapIntensity = 0.22
-  } else if (name.startsWith('can_lens')) {
-    // the lit diffuser of each recessed can
-    m.emissive.set('#fff3e2')
-    m.emissiveIntensity = 1.4
-  } else if (name.startsWith('beam')) {
-    m.map = tex.beam
-    m.color.setRGB(0.8, 0.78, 0.76)
-    m.roughness = 0.72
-    m.envMapIntensity = 0.4
-  } else if (name.startsWith('paint') || name.startsWith('cabinterior')) {
-    // painted white cabinetry: a touch of sheen, no texture
-    m.roughness = 0.5
-    m.roughnessMap = tex.sheen
-    m.metalness = 0.0
-    m.envMapIntensity = 0.32
-    // no shadow pass, so the inset panels need colour separation to read
-    if (name.startsWith('paint_white_panel')) m.color.multiplyScalar(0.9)
-  } else if (name.startsWith('glass_oven')) {
-    m.transparent = true
-    m.opacity = 0.86
-    m.roughness = 0.12
-    m.metalness = 0.35
-    m.color.set('#23272a')
-  } else if (name.startsWith('glass_window')) {
-    // clear window glass: the view outside, with a faint reflection
-    m.transparent = true
-    m.opacity = 0.1
-    m.roughness = 0.04
-    m.metalness = 0.0
-    m.envMapIntensity = 1.0
-  } else if (name.startsWith('glass')) {
-    // frosted cabinet glass — you should read the shelves through it, softly
-    m.transparent = true
-    m.opacity = 0.34
-    m.roughness = 0.22
-    m.metalness = 0.0
-    m.color.set('#e2eaee')
-    m.envMapIntensity = 1.6
-  } else if (name.startsWith('stainless_dark')) {
-    // graphite appliance panels. Metalness kills the diffuse term and there is
-    // no real environment behind these, so a metallic setting renders black —
-    // keep it mostly diffuse and let the env map supply the sheen.
-    m.color.multiplyScalar(1.35)
-    m.roughness = 0.40
-    m.metalness = 0.18
-    m.envMapIntensity = 1.4
-  } else if (name.startsWith('stainless')) {
-    m.roughness = 0.28
-    m.metalness = 0.8
-    m.envMapIntensity = 1.8
-  } else if (name.startsWith('cast_iron')) {
-    // matte cast-iron grates: almost no sheen, so they read as mass
-    m.roughness = 0.82
-    m.metalness = 0.15
-    m.envMapIntensity = 0.5
-  } else if (name.startsWith('metal_black')) {
-    m.roughness = 0.32
-    m.metalness = 0.85
-    m.envMapIntensity = 1.2
-  } else if (name.startsWith('wall') || name.startsWith('ceiling')) {
-    m.roughness = 0.95
-    m.metalness = 0.0
-    m.envMapIntensity = 0.18
-  } else if (name.startsWith('toe')) {
-    m.roughness = 0.7
-  }
-  m.needsUpdate = true
-}
-
 // 35 build steps: back wall (1-13), oven wall (14-23), island (24-35). The
 // caption follows the measured build windows, so it stays in step with what
 // is on screen at any viewport size. Returns a translations.js key.
@@ -491,58 +254,8 @@ function buildLabelKey(p, timing) {
 }
 
 // ---------------------------------------------------------------------------
-// environment + renderer setup
+// lighting: the shared studio rig, placed for this room
 // ---------------------------------------------------------------------------
-function SceneEnvironment() {
-  const { gl, scene } = useThree()
-
-  useEffect(() => {
-    // shadow-map settings live on <Canvas shadows> (see SHADOWS); just make
-    // sure the first frame draws the maps
-    gl.shadowMap.needsUpdate = true
-
-    const previous = scene.environment
-    const previousIntensity = scene.environmentIntensity
-    const pmrem = new THREE.PMREMGenerator(gl)
-    const envScene = new RoomEnvironment()
-    const target = pmrem.fromScene(envScene, 0.04)
-    scene.environment = target.texture
-    // At 1.0 the environment out-lit the sun ~5x and washed every shadow out;
-    // it is a soft fill now, and the lights do the modelling.
-    scene.environmentIntensity = 0.42
-
-    return () => {
-      scene.environment = previous
-      scene.environmentIntensity = previousIntensity
-      target.dispose()
-      pmrem.dispose()
-      envScene.traverse((child) => {
-        if (child.geometry) child.geometry.dispose?.()
-        if (Array.isArray(child.material)) child.material.forEach((m) => m.dispose?.())
-        else child.material?.dispose?.()
-      })
-    }
-  }, [gl, scene])
-
-  return null
-}
-
-// A light aimed at a fixed point on the floor plan. three.js only tracks a
-// target's matrix when it is in the scene, so it is added alongside.
-function useAimedLight(ref, aim) {
-  const { scene } = useThree()
-  const [e, s, u] = aim
-  useEffect(() => {
-    const light = ref.current
-    if (!light) return undefined
-    const target = new THREE.Object3D()
-    target.position.set(...at(e, s, u))
-    scene.add(target)
-    light.target = target
-    return () => { scene.remove(target) }
-  }, [ref, scene, e, s, u])
-}
-
 // Low sun through the three Win48s on wall 9. The walls and ceiling cast, so
 // it only gets in through the openings: bright patches with the mullions'
 // shadows across the floor and up the island's panelled side.
@@ -550,30 +263,12 @@ function useAimedLight(ref, aim) {
 // z 0..120 projected along the sun) and sized to cover all of it: anything
 // outside it counts as fully sunlit, which lit the top of the east wall white.
 // The position sits back along the same sun direction as before.
-function KeyLight() {
-  const ref = useRef()
-  useAimedLight(ref, [230, 121, 45])
-  const size = LOW ? 1024 : 2048
-  return (
-    <directionalLight
-      ref={ref}
-      position={at(-45, 52, 183)}
-      intensity={6}
-      color="#fff5e6"
-      castShadow
-      shadow-mapSize-width={size}
-      shadow-mapSize-height={size}
-      shadow-camera-near={0.5}
-      shadow-camera-far={34}
-      shadow-camera-left={-6.3}
-      shadow-camera-right={6.3}
-      shadow-camera-top={4.5}
-      shadow-camera-bottom={-4.5}
-      shadow-bias={-0.0003}
-      shadow-normalBias={0.012}
-      shadow-radius={3}
-    />
-  )
+const SUN = {
+  position: at(-45, 52, 183),
+  target: at(230, 121, 45),
+  intensity: 6,
+  color: '#fff5e6',
+  shadowBox: { near: 0.5, far: 34, left: -6.3, right: 6.3, top: 4.5, bottom: -4.5 },
 }
 
 // Recessed cans, where the plan puts them, as downward spots: pools of light
@@ -584,53 +279,29 @@ const CANS = [
   { e: 92, s: 46 }, { e: 196, s: 46, shadow: true }, { e: 286, s: 46, shadow: !LOW },
   { e: 150, s: 128 }, { e: 256, s: 128, shadow: true }, { e: 196, s: 216 },
   { e: 352, s: 104 }, { e: 352, s: 180 },
+].map(({ e, s, shadow }) => ({ position: at(e, s, 117.4), target: at(e, s, 0), shadow }))
+
+const POINTS = [
+  // the hallway is a recess the window light cannot reach — without its
+  // own fixture it reads as a dark grey slot. Short reach, so it does
+  // not shine through wall 1 into the kitchen.
+  { position: at(362, -36, 100), intensity: 2.4, color: '#fff4e4', distance: 2.6, decay: 2 },
+  // the bright spot the PDF render shows inside the hood
+  { position: at(231, 30, 58), intensity: 0.6, color: '#ffeccc', distance: 2.4, decay: 2 },
 ]
-
-function CanLight({ e, s, shadow }) {
-  const ref = useRef()
-  useAimedLight(ref, [e, s, 0])
-  const size = LOW ? 512 : 1024
-  return (
-    <spotLight
-      ref={ref}
-      position={at(e, s, 117.4)}
-      angle={0.6}
-      penumbra={0.85}
-      intensity={9}
-      decay={2}
-      color="#fff1dc"
-      castShadow={Boolean(shadow)}
-      shadow-mapSize-width={size}
-      shadow-mapSize-height={size}
-      shadow-camera-near={0.2}
-      shadow-camera-far={4}
-      shadow-bias={-0.0004}
-      shadow-normalBias={0.01}
-      shadow-radius={4}
-    />
-  )
-}
-
-function Lighting() {
-  return (
-    <>
-      <ambientLight intensity={0.08} color="#ffffff" />
-      <hemisphereLight args={['#ffffff', '#bfb6a4', 0.12]} />
-      <KeyLight />
-      {CANS.map((c) => <CanLight key={`${c.e},${c.s}`} {...c} />)}
-      {/* the hallway is a recess the window light cannot reach — without its
-          own fixture it reads as a dark grey slot. Short reach, so it does
-          not shine through wall 1 into the kitchen. */}
-      <pointLight position={at(362, -36, 100)} intensity={2.4} color="#fff4e4" distance={2.6} decay={2} />
-      {/* the bright spot the PDF render shows inside the hood */}
-      <pointLight position={at(231, 30, 58)} intensity={0.6} color="#ffeccc" distance={2.4} decay={2} />
-    </>
-  )
-}
 
 // ---------------------------------------------------------------------------
 // the kitchen model: static shell stays put, tagged parts build in on scroll
 // ---------------------------------------------------------------------------
+// Construction systems the ?engine= switch can show (see KitchenModel).
+const ENGINE_VARIANTS = {
+  inset: { system: 'face-frame', fit: 'inset' },
+  beaded: { system: 'face-frame', fit: 'inset', frame: { bead: true } },
+  overlay: { system: 'face-frame', fit: 'full-overlay' },
+  partial: { system: 'face-frame', fit: 'partial-overlay' },
+  'frameless-inset': { system: 'frameless', fit: 'inset' },
+}
+
 function KitchenModel({ progressRef, timingRef }) {
   const gl = useThree((s) => s.gl)
   const rootScene = useThree((s) => s.scene)
@@ -638,13 +309,48 @@ function KitchenModel({ progressRef, timingRef }) {
   const [scene, setScene] = useState(null)
   useEffect(() => {
     let active = true
-    new GLTFLoader().load(MODEL_URL, (gltf) => {
+    // ?engine in the URL builds the same kitchen live from the cabinet engine
+    // (src/engine) instead of loading the published model: a side-by-side
+    // check that the two are interchangeable. The engine is loaded on demand,
+    // so visitors never download it.
+    // ?engine=inset | beaded | overlay | partial | frameless-inset rebuilds it in
+    // that construction system; &door=shaker | slab changes the door style.
+    const query = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null
+    if (query && query.has('engine')) {
+      import('../../engine/index.js').then(({ buildJob, buildScene, homepageKitchen }) => {
+        if (!active) return
+        const job = { ...homepageKitchen }
+        const construction = ENGINE_VARIANTS[query.get('engine')]
+        if (construction) job.construction = construction
+        if (query.get('door')) job.style = { ...(job.style || {}), door: query.get('door') }
+        setScene(buildScene(buildJob(job).parts, { groupBy: 'step' }))
+      })
+      return () => { active = false }
+    }
+    loadKitchenGLB().then((gltf) => {
       if (active) setScene(gltf.scene)
-    })
+    }).catch((err) => console.error('[KitchenBuildSection] could not load the kitchen model', err))
     return () => { active = false }
   }, [])
 
   const model = useMemo(() => (scene ? scene.clone(true) : null), [scene])
+
+  // The clone shares the cached scene's static materials. Their envMap is
+  // this canvas's environment, which goes with the canvas: drop it on
+  // unmount so a remounted canvas hands them its own (adoptEnvironment).
+  useEffect(() => () => {
+    if (!model) return
+    model.traverse((o) => {
+      if (!o.isMesh) return
+      const list = Array.isArray(o.material) ? o.material : [o.material]
+      list.forEach((m) => {
+        if (m && m.userData.ownEnv && m.envMap) {
+          m.envMap = null
+          m.needsUpdate = true
+        }
+      })
+    })
+  }, [model])
 
   const parts = useMemo(() => {
     if (!model) return []
@@ -686,14 +392,9 @@ function KitchenModel({ progressRef, timingRef }) {
       const baseMats = Array.isArray(o.material) ? o.material : [o.material]
       baseMats.forEach((m) => applyMaterialLook(m, tex))
 
-      // Everything receives. Everything solid casts — walls and ceiling too,
-      // so daylight only gets in through the window openings. Glass does
-      // not (a frosted pane throwing a hard shadow is what made the window
-      // light read backwards), and nothing sits under the floor.
-      const matName = (baseMats[0]?.name || '').toLowerCase()
+      // everything receives; everything solid casts (see castsShadow)
       o.receiveShadow = true
-      o.castShadow = !(matName.startsWith('oak_floor') || matName.startsWith('glass') ||
-        matName.startsWith('can_lens'))
+      o.castShadow = castsShadow(baseMats[0]?.name)
 
       if (isStatic) return
 
@@ -744,18 +445,8 @@ function KitchenModel({ progressRef, timingRef }) {
   useFrame(() => {
     // the shiny finishes get the environment as their own envMap, so their
     // envMapIntensity applies instead of the scene's (deliberately low) one
-    if (model && rootScene.environment && envFor.current !== model) {
+    if (model && envFor.current !== model && adoptEnvironment(model, rootScene)) {
       envFor.current = model
-      model.traverse((o) => {
-        if (!o.isMesh) return
-        const list = Array.isArray(o.material) ? o.material : [o.material]
-        list.forEach((m) => {
-          if (m.userData.ownEnv && !m.envMap) {
-            m.envMap = rootScene.environment
-            m.needsUpdate = true
-          }
-        })
-      })
     }
 
     const p = progressRef.current.value
@@ -817,81 +508,9 @@ function KitchenModel({ progressRef, timingRef }) {
   return <primitive object={model} />
 }
 
-// What you see through wall 9's windows. Without it the openings showed the
-// room's own oak floor running on outside. A painted exterior — sky, a soft
-// tree line, lawn — standing a few feet out, so it shifts behind the mullions
-// as the camera moves the way a real view does.
-function exteriorTexture() {
-  const w = 1024
-  const h = 768
-  const c = document.createElement('canvas')
-  c.width = w
-  c.height = h
-  const x = c.getContext('2d')
-  const horizon = h * 0.58
-
-  const sky = x.createLinearGradient(0, 0, 0, horizon)
-  sky.addColorStop(0, '#a9c8e4')
-  sky.addColorStop(0.7, '#d6e6f1')
-  sky.addColorStop(1, '#eef3f3')
-  x.fillStyle = sky
-  x.fillRect(0, 0, w, horizon)
-
-  // soft clouds
-  for (let i = 0; i < 26; i += 1) {
-    const cx = Math.random() * w
-    const cy = Math.random() * horizon * 0.55
-    const r = Math.random() * 70 + 30
-    const g = x.createRadialGradient(cx, cy, 0, cx, cy, r)
-    g.addColorStop(0, 'rgba(255,255,255,0.55)')
-    g.addColorStop(1, 'rgba(255,255,255,0)')
-    x.fillStyle = g
-    x.fillRect(cx - r, cy - r, r * 2, r * 2)
-  }
-
-  // two bands of trees: distant and hazy, then nearer and darker
-  const trees = (base, spread, rMin, rMax, colours, n) => {
-    for (let i = 0; i < n; i += 1) {
-      const cx = Math.random() * w
-      const r = Math.random() * (rMax - rMin) + rMin
-      const cy = base - Math.random() * spread
-      x.fillStyle = colours[Math.floor(Math.random() * colours.length)]
-      x.beginPath()
-      x.arc(cx, cy, r, 0, Math.PI * 2)
-      x.fill()
-    }
-  }
-  trees(horizon + 6, 70, 18, 46, ['#8fa98f', '#9bb39a', '#86a087'], 150)
-  trees(horizon + 30, 60, 26, 60, ['#58764f', '#4d6a45', '#62804f', '#6f8b58'], 120)
-
-  const lawn = x.createLinearGradient(0, horizon + 20, 0, h)
-  lawn.addColorStop(0, '#7f9d5c')
-  lawn.addColorStop(1, '#6b8a4a')
-  x.fillStyle = lawn
-  x.fillRect(0, horizon + 20, w, h - horizon - 20)
-  for (let i = 0; i < 5000; i += 1) {
-    x.fillStyle = `rgba(${Math.random() < 0.5 ? '60,84,40' : '150,176,110'},0.18)`
-    x.fillRect(Math.random() * w, horizon + 20 + Math.random() * (h - horizon), 2, 3)
-  }
-
-  const tex = new THREE.CanvasTexture(c)
-  tex.colorSpace = THREE.SRGBColorSpace
-  return tex
-}
-
-function ExteriorView() {
-  const tex = useMemo(() => exteriorTexture(), [])
-  useEffect(() => () => tex.dispose(), [tex])
-  // plan: 5' outside wall 9, spanning the three windows with room to spare
-  const [px, py, pz] = at(-60, 105, 70)
-  return (
-    <mesh position={[px, py, pz]} rotation={[0, Math.PI / 2, 0]} renderOrder={-1}>
-      <planeGeometry args={[340 * IN, 280 * IN]} />
-      {/* unlit: daylight outside is far brighter than anything in the room */}
-      <meshBasicMaterial map={tex} fog={false} toneMapped />
-    </mesh>
-  )
-}
+// What you see through wall 9's windows (see ExteriorView). Plan: 5' outside
+// wall 9, spanning the three windows with room to spare.
+const EXTERIOR = { position: at(-60, 105, 70), rotation: [0, Math.PI / 2, 0], size: [340 * IN, 280 * IN] }
 
 function CameraRig({ progressRef, timingRef }) {
   const { camera } = useThree()
@@ -960,38 +579,16 @@ function TestBridge({ progressRef }) {
 function KitchenScene({ progressRef, timingRef }) {
   return (
     <>
-      <SceneEnvironment />
+      <StudioEnvironment intensity={0.42} />
       <color attach="background" args={['#eef0ef']} />
       <fog attach="fog" args={['#eef0ef', 16, 34]} />
-      <Lighting />
+      <StudioLighting sun={SUN} cans={CANS} points={POINTS} low={LOW} />
       <CameraRig progressRef={progressRef} timingRef={timingRef} />
       <TestBridge progressRef={progressRef} />
       <KitchenModel progressRef={progressRef} timingRef={timingRef} />
-      <ExteriorView />
-      {/* Screen-space AO supplies the contact darkening a shadow map cannot:
-          the crevices between doors, under the crown, inside the panel
-          recesses. This is most of what separates "CG" from "photo".
-          (N8AO rebuilds normals from depth, so no NormalPass — that was a
-          second full scene render for nothing.) */}
-      <EffectComposer multisampling={0}>
-        {/* N8AO is far less noisy than the classic SSAO pass, which at this
-            scene's scale speckled every wall junction with black. */}
-        <N8AO
-          aoRadius={0.4}
-          distanceFalloff={1}
-          intensity={1.8}
-          aoSamples={LOW ? 8 : 16}
-          denoiseSamples={4}
-          denoiseRadius={10}
-          halfRes={LOW}
-          color="black"
-        />
-        {/* The composer switches the renderer's own tone mapping off, so the
-            exposure on <Canvas> did nothing and highlights clipped per
-            channel. Tone map here, where the HDR buffer actually is. */}
-        <ToneMapping mode={ToneMappingMode.NEUTRAL} />
-        <SMAA />
-      </EffectComposer>
+      <ExteriorView {...EXTERIOR} />
+      <StudioEffects low={LOW} />
+      <ContextRelease />
     </>
   )
 }
@@ -1011,10 +608,13 @@ export default function KitchenBuildSection({ children }) {
   const [labelKey, setLabelKey] = useState(() => buildLabelKey(reduceMotion ? 1 : 0, timingRef.current))
   // only run the WebGL loop while the section is on (or near) screen
   const [active, setActive] = useState(false)
+  // keep the canvas (and its WebGL context) only while the section is near
+  const [mounted, setMounted] = useState(true)
 
   useEffect(() => {
     let lastLabel = null
     let lastActive = null
+    let lastMounted = true
 
     // Progress and on-screen state both come straight off the section's rect.
     // (An IntersectionObserver is not reliable here — it can go quiet while the
@@ -1065,6 +665,16 @@ export default function KitchenBuildSection({ children }) {
         lastActive = onScreen
         setActive(onScreen)
       }
+
+      const vh = window.innerHeight
+      const away = Math.max(0, rect.top - vh, -rect.bottom) / vh
+      const keep = lastMounted ? away <= UNMOUNT_VIEWPORTS : away <= REMOUNT_VIEWPORTS
+      if (keep !== lastMounted) {
+        lastMounted = keep
+        // a fresh canvas starts its camera where the scroll is, no glide
+        if (keep) progressRef.current.snap = true
+        setMounted(keep)
+      }
     }
 
     let frame = 0
@@ -1094,25 +704,18 @@ export default function KitchenBuildSection({ children }) {
       {/* Decorative, caption included: hidden from assistive technology so the
           changing caption is never read out of context (and never make it live) */}
       <div className="kitchen-build-sticky" aria-hidden="true">
-        <Canvas
-          frameloop={active ? 'always' : 'never'}
-          shadows={SHADOWS}
-          dpr={[1, LOW ? 1.4 : 1.75]}
-          camera={{ position: CAM_START.pos, fov: 50, near: 0.25, far: 42 }}
-          gl={{
-            // SMAA does the anti-aliasing; the composer renders off-screen,
-            // so a multisampled canvas would only cost memory
-            antialias: false,
-            alpha: false,
-            powerPreference: 'high-performance',
-            // read by the ToneMapping effect (the composer owns tone mapping)
-            // exposed for the room, as an interior photographer would; the
-            // sun patches are allowed to run bright
-            toneMappingExposure: 1.3,
-          }}
-        >
-          <KitchenScene progressRef={progressRef} timingRef={timingRef} />
-        </Canvas>
+        {mounted ? (
+          <Canvas
+            // off screen but mounted: draw only when something changes, so a
+            // remounted canvas renders (and compiles its shaders) once, ahead
+            // of being seen
+            frameloop={active ? 'always' : 'demand'}
+            {...CANVAS_PROPS}
+            camera={{ position: CAM_START.pos, fov: 50, near: 0.25, far: 42 }}
+          >
+            <KitchenScene progressRef={progressRef} timingRef={timingRef} />
+          </Canvas>
+        ) : null}
         <div className="kitchen-build-label">{t(labelKey)}</div>
       </div>
       {/* homepage content scrolls over the sticky canvas; the gaps between

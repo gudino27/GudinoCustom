@@ -1,4 +1,5 @@
 import { checkWallCollision, pushAwayFromWall } from './collisionUtils';
+import { isQuarterTurned } from './rotation';
 export const snapToCabinet = (x, y, width, depth, excludeId, rotation, allElements, scale) => {
   const snapDistance = 8; // Increased snap distance for easier snapping
   let snappedX = x;
@@ -11,14 +12,8 @@ export const snapToCabinet = (x, y, width, depth, excludeId, rotation, allElemen
       const elY = element.y;
 
       // Calculate element dimensions based on rotation
-      const elWidth =
-        element.rotation === 0 || element.rotation === 180
-          ? element.width * scale
-          : element.depth * scale;
-      const elDepth =
-        element.rotation === 0 || element.rotation === 180
-          ? element.depth * scale
-          : element.width * scale;
+      const elWidth = !isQuarterTurned(element.rotation) ? element.width * scale : element.depth * scale;
+      const elDepth = !isQuarterTurned(element.rotation) ? element.depth * scale : element.width * scale;
 
       // Snap to right side of existing element
       if (

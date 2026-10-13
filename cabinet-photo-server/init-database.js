@@ -391,6 +391,14 @@ async function addPriceTables(db) {
     );
   }
 
+  // Every item the designer offers (refrigerator cabinet, appliances,
+  // fixtures) and the pantry prices; never overwrites a price already set
+  const { seedMissingPrices } = require('./utils/price-defaults');
+  const seeded = await seedMissingPrices(db);
+  if (seeded.cabinetPrices.length || seeded.wallPricing.length) {
+    console.log(' Added missing prices:', seeded);
+  }
+
   console.log(' Created price tables and default data');
 }
 

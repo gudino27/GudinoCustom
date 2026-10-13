@@ -4,7 +4,7 @@ import '../css/footer.css';
 import { useLanguage } from '../../contexts/LanguageContext';
 
 const Footer = () => {
-  const { t } = useLanguage();
+  const { t, localizedPath: lp } = useLanguage();
 
   return (
     <footer className="footer-glass">
@@ -19,24 +19,28 @@ const Footer = () => {
         </div>
         
         <div className="footer-section">
-          <Link to="/sms-consent-verification" className="footer-link">
+          <Link to={lp("/sms-consent-verification")} className="footer-link">
             {t('footer.smsConsent')}
           </Link>
           <span className="footer-separator" aria-hidden="true">|</span>
-          <Link to="/sms-terms" className="footer-link">
+          <Link to={lp("/sms-terms")} className="footer-link">
             {t('footer.terms')}
           </Link>
           <span className="footer-separator" aria-hidden="true">|</span>
-          <Link to="/privacy" className="footer-link">
+          <Link to={lp("/privacy")} className="footer-link">
             {t('footer.privacy')}
           </Link>
           <span className="footer-separator" aria-hidden="true">|</span>
-          <Link to="/cabinet-Care" className="footer-link">
+          <Link to={lp("/cabinet-care")} className="footer-link">
             {t('footer.cabinetCare')}
           </Link>
           <span className="footer-separator" aria-hidden="true">|</span>
-          <Link to="/hardware-catalog" className="footer-link">
+          <Link to={lp("/hardware-catalog")} className="footer-link">
             {t('footer.hardwareCatalog')}
+          </Link>
+          <span className="footer-separator" aria-hidden="true">|</span>
+          <Link to={lp("/faq")} className="footer-link">
+            {t('nav.faq')}
           </Link>
         </div>
         

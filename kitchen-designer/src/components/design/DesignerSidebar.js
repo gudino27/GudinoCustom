@@ -13,6 +13,9 @@ import WallManagement from './WallManagement';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { announce } from '../ui/LiveRegion';
 import { getElementName } from './elementName';
+import { formatPrice, wallCharges } from '../../utils/designer/pricing';
+import ItemPalette from './palette/ItemPalette';
+import { formatFeet } from '../../utils/designer/planUnits';
 
 const DesignerSidebar = ({
   // Responsive state
@@ -94,7 +97,9 @@ const DesignerSidebar = ({
   getDoorsOnWall,
   getDoorTypes
   ,
-  applyFloorPlanPreset
+  applyFloorPlanPreset,
+  // "Add pantry" and the pantries in the room (PantrySection, from the page)
+  pantryControls = null
 }) => {
   const { t } = useLanguage();
   const [bulkMaterial, setBulkMaterial] = useState('');
@@ -121,7 +126,8 @@ const DesignerSidebar = ({
   };
 
   const handleAddElement = (key) => {
-    addElement(key);
+    // addElement returns null (and says why) when the room has no free spot
+    if (!addElement(key)) return;
     announce(t('designer.itemAdded', { name: getElementName(t, key, elementTypes) }));
   };
 
@@ -203,7 +209,7 @@ const DesignerSidebar = ({
                 <Bath size={16} />{t('designer.bathroom', 'Bathroom')}
               </button>
             </div>
-            <p className="text-xs text-gray-600 mt-2 text-center">{activeRoom === 'kitchen' ? t('designer.kitchen') : t('designer.bathroom')}: {currentRoomData.dimensions.width}' × {currentRoomData.dimensions.height}'</p>
+            <p className="text-xs text-gray-600 mt-2 text-center">{activeRoom === 'kitchen' ? t('designer.kitchen') : t('designer.bathroom')}: {formatFeet(currentRoomData.dimensions.width)} × {formatFeet(currentRoomData.dimensions.height)}</p>
           </fieldset>
           <div className="mb-6 space-y-2">
             <button type="button" onClick={() => setShowPricing(!showPricing)} className="w-full p-3 min-h-11 bg-green-700 text-white rounded hover:bg-green-800 flex items-center justify-center gap-2">
@@ -232,8 +238,16 @@ const DesignerSidebar = ({
                   if (wallNum <= 4) return true;
                   const customWall = getCustomWallByNumber(wallNum);
                   return !!customWall;
+                }).flatMap(wallNum => {
+                  if (wallNum <= 4) return [wallNum];
+                  // A drawn or pantry wall has two faces, each with its own items
+                  // (a pantry wall: the kitchen side first, then the pantry side)
+                  const customWall = getCustomWallByNumber(wallNum);
+                  const inside = customWall.pantryInside;
+                  const faces = inside ? [inside === 'left' ? 'right' : 'left', inside] : ['right', 'left'];
+                  return faces.map(face => `${wallNum}:${face}`);
                 }).map(wall => (
-                  <button type="button" key={wall} onClick={() => setSelectedWall(wall)} aria-pressed={selectedWall === wall} className={`p-2 text-sm rounded ${selectedWall === wall ? 'bg-blue-700 text-white' : 'bg-gray-200 hover:bg-gray-300'}`}>{getWallName(wall)}</button>
+                  <button type="button" key={wall} onClick={() => setSelectedWall(wall)} aria-pressed={selectedWall === wall} className={`p-2 text-sm rounded ${typeof wall === 'string' ? 'col-span-2' : ''} ${selectedWall === wall ? 'bg-blue-700 text-white' : 'bg-gray-200 hover:bg-gray-300'}`}>{getWallName(wall)}</button>
                 ))}
               </div>
             </fieldset>
@@ -262,6 +276,7 @@ const DesignerSidebar = ({
               </div>
             )}
           </div>
+          {pantryControls}
           <WallManagement
             wallAvailability={wallAvailability}
             collapsedSections={collapsedSections}
@@ -326,63 +341,37 @@ const DesignerSidebar = ({
               <p className="text-sm text-gray-600 mt-2">{t('designer.changeAllMaterialsHint', { count: cabinetCount })}</p>
             </div>
           )}
-          <div className="mb-8">
-            <button
-              type="button"
-              onClick={() => toggleSection('cabinetOptions')}
-              className="flex items-center gap-2 text-lg font-semibold mb-4 hover:text-blue-700"
-              aria-expanded={!collapsedSections.cabinetOptions}
-              aria-controls="kd-cabinet-options"
-            >
-              <span aria-hidden="true" className={`transform transition-transform ${collapsedSections.cabinetOptions ? '' : 'rotate-90'}`}>▶</span>{activeRoom === 'kitchen' ? t('designer.kitchenCabinets') : t('designer.bathroomCabinets')}
-            </button>
-            {!collapsedSections.cabinetOptions && (
-              <div id="kd-cabinet-options" className="space-y-2">
-                {Object.entries(elementTypes).filter(([key, el]) => el.category === 'cabinet' && el.room === activeRoom).map(([key, el]) => (
-                  <button type="button" key={key} onClick={() => handleAddElement(key)} className="w-full text-left p-3 bg-gray-50 hover:bg-gray-100 rounded-lg" title={`$${basePrices[key] || 0}`}>
-                    <div className="font-medium">{getElementName(t, key, elementTypes)}</div>
-                    <div className="text-xs text-gray-600">{el.defaultWidth}"W × {el.defaultDepth}"D × {el.fixedHeight || el.defaultHeight}"H</div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-          <div className="mb-8">
-            <button
-              type="button"
-              onClick={() => toggleSection('appliances')}
-              className="flex items-center gap-2 text-lg font-semibold mb-4 hover:text-blue-700"
-              aria-expanded={!collapsedSections.appliances}
-              aria-controls="kd-appliance-options"
-            >
-              <span aria-hidden="true" className={`transform transition-transform ${collapsedSections.appliances ? '' : 'rotate-90'}`}>▶</span>{t('designer.appliances')}
-            </button>
-            {!collapsedSections.appliances && (
-              <div id="kd-appliance-options" className="space-y-2">
-                {Object.entries(elementTypes).filter(([key, el]) => el.category === 'appliance' && el.room === activeRoom).map(([key, el]) => (
-                  <button type="button" key={key} onClick={() => handleAddElement(key)} className="w-full text-left p-3 bg-gray-50 hover:bg-gray-100 rounded-lg">
-                    <div className="font-medium">{getElementName(t, key, elementTypes)}</div>
-                    <div className="text-xs text-gray-600">{el.defaultWidth}"W × {el.defaultDepth}"D × {el.fixedHeight}"H</div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          <ItemPalette
+            elementTypes={elementTypes}
+            activeRoom={activeRoom}
+            basePrices={basePrices}
+            materialMultipliers={materialMultipliers}
+            onAdd={handleAddElement}
+            canDrop={viewMode === 'floor'}
+            compact={isMobile}
+            onTouchDragStart={isOverlayMode ? () => setSidebarCollapsed(true) : undefined}
+          />
           {showPricing && (
             <div className="mt-6 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
               <h3 className="font-semibold mb-3 text-yellow-800">{t('pricing.title')}</h3>
               <div className="space-y-2 text-sm">
-                <div className="flex justify-between"><span>{t('pricing.cabinets')}:</span><span>${calculateTotalPrice().toFixed(2)}</span></div>
                 {(() => {
-                  const removedWalls = currentRoomData.removedWalls || [];
-                  const chargeableRemoved = removedWalls.filter(w => originalWalls.includes(w));
-                  const customAdded = (currentRoomData.walls || []).filter(w => !originalWalls.includes(w));
-                  const totalWallCost = (chargeableRemoved.length * wallPricing.removeWall) + (customAdded.length * wallPricing.addWall);
-                  return totalWallCost > 0 ? (
-                    <div className="flex justify-between"><span>{t('pricing.walls')}:</span><span>${totalWallCost.toFixed(2)}</span></div>
-                  ) : null;
+                  // Items (cabinets, priced appliances, colors) = total minus the wall and pantry charges
+                  const walls = wallCharges({ ...currentRoomData, originalWalls }, wallPricing);
+                  const totalWallCost = walls.removed.cost + walls.added.cost;
+                  return (
+                    <>
+                      <div className="flex justify-between"><span>{t('pricing.cabinets')}:</span><span>{formatPrice(calculateTotalPrice() - walls.total)}</span></div>
+                      {totalWallCost > 0 && (
+                        <div className="flex justify-between"><span>{t('pricing.walls')}:</span><span>{formatPrice(totalWallCost)}</span></div>
+                      )}
+                      {walls.pantries > 0 && (
+                        <div className="flex justify-between"><span>{t('pricing.pantries')}:</span><span>{formatPrice(walls.pantries)}</span></div>
+                      )}
+                    </>
+                  );
                 })()}
-                <div className="border-t pt-2 font-semibold flex justify-between"><span>{t('designer.totalEstimate')}:</span><span>${calculateTotalPrice().toFixed(2)}</span></div>
+                <div className="border-t pt-2 font-semibold flex justify-between"><span>{t('designer.totalEstimate')}:</span><span>{formatPrice(calculateTotalPrice())}</span></div>
                 <p className="text-xs text-gray-600 mt-2">{t('designer.estimateDisclaimer')}</p>
               </div>
             </div>

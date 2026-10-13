@@ -685,7 +685,7 @@ function AppointmentBooking() {
 
   return (
     <div className="min-h-screen bg-gray-50"style={{background:'rgba(110, 110, 110, 1)'}}>
-      <SEO title={t('appointments.title')} description={t('appointments.subtitle')} />
+      <SEO title={t('seo.booking.title')} description={t('seo.booking.description')} />
       <Navigation />
 
       <main id="main-content" tabIndex={-1} className="pt-24 pb-16 px-4">

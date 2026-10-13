@@ -6,6 +6,12 @@ import {
 } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { usePricing } from '../../contexts/PricingContext';
+import {
+  DEFAULT_BASE_PRICES,
+  DEFAULT_WALL_PRICING,
+  resolveWallPricing,
+  withDefaults,
+} from '../../utils/designer/pricing';
 
 // Import modular pricing components
 import CabinetPricing from '../pricing/CabinetPricing';
@@ -25,67 +31,9 @@ const PriceManagement = ({ token, API_BASE, userRole }) => {
   // Active tab state for mobile navigation
   const [activeTab, setActiveTab] = useState('cabinets');
 
-  // State for all pricing data
-  const [basePrices, setBasePrices] = useState({
-    // Kitchen Cabinets
-    'base': 250,
-    'sink-base': 320,
-    'wall': 180,
-    'tall': 450,
-    'corner': 380,
-    'drawer-base': 280,
-    'double-drawer-base': 350,
-    'glass-wall': 220,
-    'open-shelf': 160,
-    'island-base': 580,
-    'peninsula-base': 420,
-    'pantry': 520,
-    'corner-wall': 210,
-    'lazy-susan': 450,
-    'blind-corner': 320,
-    'appliance-garage': 280,
-    'wine-rack': 350,
-    'spice-rack': 180,
-    'tray-divider': 200,
-    'pull-out-drawer': 250,
-    'soft-close-drawer': 300,
-    'under-cabinet-lighting': 150,
-
-    // Bathroom Cabinets
-    'vanity': 280,
-    'vanity-sink': 350,
-    'double-vanity': 650,
-    'floating-vanity': 420,
-    'corner-vanity': 380,
-    'vanity-tower': 320,
-    'medicine': 120,
-    'medicine-mirror': 180,
-    'linen': 350,
-    'linen-tower': 420,
-    'wall-hung-vanity': 380,
-    'vessel-sink-vanity': 400,
-    'undermount-sink-vanity': 380,
-    'powder-room-vanity': 250,
-    'master-bath-vanity': 750,
-    'kids-bathroom-vanity': 220,
-
-    // Kitchen Appliances
-    'refrigerator': 0,        // Pricing handled separately for appliances
-    'stove': 0,
-    'dishwasher': 0,
-    'microwave': 0,
-    'wine-cooler': 0,
-    'ice-maker': 0,
-    'range-hood': 0,
-    'double-oven': 0,
-    'cooktop': 0,
-    'garbage-disposal': 0,
-
-    // Bathroom Fixtures
-    'toilet': 0,
-    'bathtub': 0,
-    'shower': 0
-  });
+  // State for all pricing data: every item the designer offers, with the
+  // designer's defaults until the API answers (utils/designer/pricing.js)
+  const [basePrices, setBasePrices] = useState(() => ({ ...DEFAULT_BASE_PRICES }));
 
   const [materialMultipliers, setMaterialMultipliers] = useState([]);
 
@@ -96,10 +44,7 @@ const PriceManagement = ({ token, API_BASE, userRole }) => {
     'custom': 500
   });
 
-  const [wallPricing, setWallPricing] = useState({
-    addWall: 1500,
-    removeWall: 2000
-  });
+  const [wallPricing, setWallPricing] = useState(() => ({ ...DEFAULT_WALL_PRICING }));
 
   const [wallAvailability, setWallAvailability] = useState({
     addWallEnabled: true,
@@ -160,9 +105,9 @@ const PriceManagement = ({ token, API_BASE, userRole }) => {
 
       if (cabinetRes.ok) {
         const cabinetData = await cabinetRes.json();
-        if (cabinetData && Object.keys(cabinetData).length > 0) {
-          setBasePrices(cabinetData);
-        }
+        // Saved prices over the defaults: an item the database has no row
+        // for yet (e.g. refrigerator-cabinet) still shows, and saving adds it
+        setBasePrices(withDefaults(DEFAULT_BASE_PRICES, cabinetData));
       }
 
       if (materialRes.ok) {
@@ -194,9 +139,8 @@ const PriceManagement = ({ token, API_BASE, userRole }) => {
 
       if (wallRes.ok) {
         const wallData = await wallRes.json();
-        if (wallData && Object.keys(wallData).length > 0) {
-          setWallPricing(wallData);
-        }
+        // pantryWall / casedOpening; an older table prices pantry walls as addWall
+        setWallPricing(resolveWallPricing(wallData));
       }
 
       if (wallAvailRes.ok) {
