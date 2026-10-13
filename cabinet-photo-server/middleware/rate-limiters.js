@@ -6,6 +6,7 @@
  */
 
 const rateLimit = require('express-rate-limit');
+const { clientIp } = require('../utils/client-ip');
 
 /**
  * Global rate limiter for all API requests
@@ -72,9 +73,30 @@ const publicApiLimiter = rateLimit({
   legacyHeaders: false
 });
 
+/**
+ * Public design link rate limiter
+ * The client's 3D design view (GET /api/design-links/:token and its scene.glb).
+ * One open is 2 requests, and phone carriers share IPs.
+ *
+ * Limits: 120 requests per 15 minutes per client IP
+ */
+const designLinkPublicLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 120, // 120 requests per window
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: clientIp,
+  validate: { trustProxy: false },
+  handler: (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    res.status(429).json({ error: 'rate_limited' });
+  }
+});
+
 module.exports = {
   globalLimiter,
   authStrictLimiter,
   passwordResetLimiter,
-  publicApiLimiter
+  publicApiLimiter,
+  designLinkPublicLimiter
 };

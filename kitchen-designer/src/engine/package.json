@@ -4,5 +4,5 @@
   "private": true,
   "type": "module",
   "main": "index.js",
-  "description": "Parametric cabinet geometry shared by the website designer and Gudino Studio."
+  "description": "Parametric cabinet geometry shared by the website designer and ___."
 }

@@ -382,6 +382,45 @@ async function notifyInvoiceOpened(data) {
   });
 }
 
+// Place names that mean "no real city" (utils/geolocation.js returns these strings)
+const NOT_A_PLACE = new Set(["", "Unknown", "Local", "Localhost"]);
+
+/**
+ * Body text for the design-link push.
+ * "<title> was opened in <city>, <region>." when the city is a real name,
+ * else "<title> was opened."
+ */
+function designLinkViewedBody({ title, city, region } = {}) {
+  const name = String(title == null ? "" : title);
+  const c = typeof city === "string" ? city.trim() : "";
+  if (!NOT_A_PLACE.has(c)) {
+    const r = typeof region === "string" ? region.trim() : "";
+    return NOT_A_PLACE.has(r) ? `${name} was opened in ${c}.` : `${name} was opened in ${c}, ${r}.`;
+  }
+  return `${name} was opened.`;
+}
+
+/**
+ * Send notification when a client opens a private design link
+ * (not notifyDesignSubmitted, which is the quick-quote designer).
+ * Throws on DB errors (sendToAdmins); the caller catches.
+ * @param {Object} data
+ * @param {string} data.title - Design link title (public, never the client name)
+ * @param {string|null} data.city
+ * @param {string|null} data.region
+ */
+async function notifyDesignLinkViewed(data) {
+  return await sendToAdmins({
+    title: "Design view opened",
+    body: designLinkViewedBody(data),
+    data: {
+      type: "design_link_viewed",
+      title: String(data && data.title != null ? data.title : "")
+    },
+    badge: 1
+  });
+}
+
 /**
  * Send notification when a client views updated invoice changes
  * @param {Object} data - Invoice data
@@ -466,6 +505,8 @@ module.exports = {
   notifyTestimonialSubmitted,
   notifyInvoiceOpened,
   notifyInvoiceChangesViewed,
+  notifyDesignLinkViewed,
+  designLinkViewedBody,
   notifyDesignSubmitted,
   notifyQuickQuoteSubmitted
 };

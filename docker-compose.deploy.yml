@@ -18,6 +18,7 @@ services:
     volumes:
       - ./data/uploads:/app/uploads
       - ./data/database:/app/database
+      - ./data/geolite2:/app/data/geolite2
     networks:
       app-network:
         aliases:

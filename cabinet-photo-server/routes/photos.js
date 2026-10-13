@@ -6,7 +6,7 @@ const sharp = require("sharp");
 const path = require("path");
 const fs = require("fs").promises;
 const { photoDb } = require("../db-helpers");
-const { authenticateUser } = require("../middleware/auth");
+const { authenticateUser, requireRole } = require("../middleware/auth");
 const { upload, uploadMedia, getVideoDuration, convertVideoToMultiQuality, generateVideoThumbnail } = require("../middleware/upload");
 
 async function getImageDimensions(filePath) {
@@ -52,7 +52,7 @@ router.get("/", async (req, res) => {
   }
 });
 // Upload media (photo or video)
-router.post("/", uploadMedia.single("photo"), async (req, res) => {
+router.post("/", authenticateUser, requireRole(["admin", "super_admin"]), uploadMedia.single("photo"), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: "No file uploaded" });
@@ -238,7 +238,7 @@ router.post("/", uploadMedia.single("photo"), async (req, res) => {
     res.status(500).json({ error: "Failed to upload media: " + error.message });
   }
 });
-router.put("/reorder", async (req, res) => {
+router.put("/reorder", authenticateUser, requireRole(["admin", "super_admin"]), async (req, res) => {
   try {
     const { photoIds } = req.body;
 
@@ -259,7 +259,7 @@ router.put("/reorder", async (req, res) => {
   }
 });
 // Updates the photo
-router.put("/:id", async (req, res) => {
+router.put("/:id", authenticateUser, requireRole(["admin", "super_admin"]), async (req, res) => {
   try {
     const photoId = parseInt(req.params.id);
     const updates = {};
@@ -342,7 +342,7 @@ router.put("/:id", async (req, res) => {
   }
 });
 // Delete photo
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", authenticateUser, requireRole(["admin", "super_admin"]), async (req, res) => {
   try {
     const photoId = parseInt(req.params.id);
 
@@ -436,7 +436,7 @@ router.get("/:id", async (req, res) => {
 });
 
 // One-time thumbnail regeneration endpoint (admin only)
-router.post("/regenerate-thumbnails", authenticateUser, async (req, res) => {
+router.post("/regenerate-thumbnails", authenticateUser, requireRole(["admin", "super_admin"]), async (req, res) => {
   try {
     console.log("[REGENERATE] Starting thumbnail regeneration...");
 

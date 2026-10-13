@@ -42,6 +42,8 @@ const instagramRoutes = require("./routes/instagram");
 const timelinesRoutes = require("./routes/timelines");
 const appointmentsRoutes = require("./routes/appointments");
 const showroomRoutes = require("./routes/showroom");
+const designLinksRoutes = require("./routes/designLinks");
+const { cleanupDesignLinks } = require("./utils/data-cleanup");
 
 const app = express();
 
@@ -131,6 +133,15 @@ app.use(["/photos", "/testimonial-photos"], (req, res, next) => {
   next();
 });
 
+
+app.use("/photos", (req, res, next) => {
+  let p;
+  try { p = decodeURIComponent(req.path); } catch { return res.sendStatus(400); }
+  p = path.posix.normalize(p.replace(/\\/g, "/")).replace(/^\/+/, "").toLowerCase();
+  if (p === "design-links" || p.startsWith("design-links/")) return res.sendStatus(404);
+  next();
+});
+
 // Serve static files from uploads directory
 app.use("/photos", express.static(path.join(__dirname, "uploads")));
 app.use("/testimonial-photos", express.static(path.join(__dirname, "uploads", "testimonial-photos")));
@@ -154,6 +165,7 @@ app.use("/api/timeclock", timeclockRoutes);
 app.use("/api/admin", adminTestimonialsRoutes);
 app.use("/api/instagram", instagramRoutes);
 app.use("/api", timelinesRoutes);
+app.use("/api", designLinksRoutes);
 app.use("/", appointmentsRoutes);
 app.use("/api/showroom", showroomRoutes);
 app.use("/", adminRoutes);
@@ -172,6 +184,13 @@ async function startServer() {
       console.log(`✅ Server running on port ${PORT}`);
       console.log(`📂 Upload directory: ${path.join(__dirname, "uploads")}`);
     });
+
+    // Client design links: remove links 180 days after they end, once a day
+    setInterval(() => {
+      cleanupDesignLinks().catch((error) => {
+        console.error("Design link cleanup failed:", error.message);
+      });
+    }, 24 * 60 * 60 * 1000).unref();
   } catch (error) {
     console.error('❌ Failed to start server:', error);
     process.exit(1);

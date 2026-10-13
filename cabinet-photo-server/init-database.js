@@ -65,6 +65,9 @@ async function initializeDatabase() {
     console.log(' Adding showroom material swapping tables...');
     await addShowroomMaterialTables(db);
 
+    console.log(' Adding client design link tables...');
+    await addDesignLinkTables(db);
+
     console.log('\n✅ Database initialization completed successfully!');
 
   } catch (error) {
@@ -77,8 +80,10 @@ async function initializeDatabase() {
   // Run data cleanup for privacy compliance (24-month retention)
   // Runs after database initialization with its own connection
   console.log(' Running data cleanup (privacy compliance)...');
-  const { cleanupOldAnalytics } = require('./utils/data-cleanup');
+  const { cleanupOldAnalytics, cleanupDesignLinks } = require('./utils/data-cleanup');
   await cleanupOldAnalytics();
+  // Client design links: 180 days after a link ends (also daily, server.js)
+  await cleanupDesignLinks();
 }
 
 async function createBasicTables(db) {
@@ -1367,6 +1372,45 @@ async function addInvoiceTables(db) {
   `);
 
   console.log(' Created invoice system tables and default data');
+}
+
+// Private client design links (3D views sent from ____).
+// Foreign keys are not enforced (no PRAGMA foreign_keys), so REFERENCES is
+// documentation only. No IP column: the city is looked up when the view happens.
+async function addDesignLinkTables(db) {
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS design_links (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      token         TEXT UNIQUE NOT NULL,
+      title         TEXT NOT NULL,
+      client_name   TEXT,
+      studio_job_id TEXT,
+      revision      INTEGER NOT NULL DEFAULT 1,
+      price_text    TEXT,
+      is_active     INTEGER NOT NULL DEFAULT 1,
+      active_until  TEXT NOT NULL,
+      scene_bytes   INTEGER NOT NULL,
+      manifest_json TEXT NOT NULL,
+      created_by    INTEGER REFERENCES users(id),
+      created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at    DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await db.exec('CREATE INDEX IF NOT EXISTS idx_design_links_job ON design_links(studio_job_id)');
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS design_link_views (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      link_id    INTEGER NOT NULL REFERENCES design_links(id),
+      revision   INTEGER NOT NULL,
+      viewed_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+      user_agent TEXT,
+      city       TEXT,
+      region     TEXT,
+      country    TEXT
+    )
+  `);
+  await db.exec('CREATE INDEX IF NOT EXISTS idx_design_link_views_link ON design_link_views(link_id, viewed_at)');
+  console.log(' Design link tables ready');
 }
 
 async function addSmsRoutingTables(db) {

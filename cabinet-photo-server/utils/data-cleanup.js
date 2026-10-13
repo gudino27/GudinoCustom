@@ -8,6 +8,7 @@
 const { open } = require('sqlite');
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
+const fs = require('fs');
 
 /**
  * Get database connection
@@ -190,9 +191,99 @@ async function getRetentionStats() {
   return stats;
 }
 
+/**
+ * Clean up private client design links (180-day retention)
+ * Every link whose active_until is more than 180 days ago loses its views,
+ * its row and its folder. Folders under uploads/design-links/ with no row are
+ * removed too. Runs at startup and once a day (server.js). No VACUUM.
+ * Logs link ids only, never tokens.
+ * @returns {Promise<Object>} Cleanup statistics
+ */
+const DESIGN_LINKS_DIR = path.join(__dirname, '..', 'uploads', 'design-links');
+const DESIGN_LINK_TOKEN_RE = /^[a-f0-9]{64}$/;
+const DESIGN_LINK_RETENTION_DAYS = 180;
+// A POST makes the folder just before it inserts the row: leave fresh folders alone
+const DESIGN_LINK_ORPHAN_GRACE_MS = 60 * 60 * 1000;
+
+function designLinkFolder(token) {
+  if (typeof token !== 'string' || !DESIGN_LINK_TOKEN_RE.test(token)) return null;
+  const dir = path.join(DESIGN_LINKS_DIR, token);
+  return path.dirname(dir) === DESIGN_LINKS_DIR ? dir : null;
+}
+
+async function cleanupDesignLinks() {
+  const { getDb: getHelperDb, designLinkDb } = require('../db-helpers');
+  const stats = { links: 0, orphanFolders: 0, errors: [] };
+  const cutoff = Date.now() - DESIGN_LINK_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+
+  try {
+    const db = await getHelperDb();
+    let rows;
+    try {
+      rows = await db.all('SELECT id, token, active_until FROM design_links');
+    } finally {
+      await db.close();
+    }
+
+    const kept = new Set();
+    for (const row of rows) {
+      const until = Date.parse(row.active_until);
+      // Compared in JS only; an unreadable date is kept, never guessed
+      if (!(until < cutoff)) {
+        kept.add(row.token);
+        continue;
+      }
+      try {
+        await designLinkDb.remove(row.id);
+        stats.links++;
+        const dir = designLinkFolder(row.token);
+        if (dir) {
+          await fs.promises.rm(dir, { recursive: true, force: true });
+        } else {
+          console.error('   Design link folder skipped: bad token on link', row.id);
+        }
+      } catch (error) {
+        console.error('   Error removing design link', row.id, error.message);
+        stats.errors.push({ link: row.id, error: error.message });
+      }
+    }
+
+    let entries = [];
+    try {
+      entries = await fs.promises.readdir(DESIGN_LINKS_DIR);
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
+    for (const name of entries) {
+      if (kept.has(name)) continue;
+      const dir = path.join(DESIGN_LINKS_DIR, name);
+      if (path.dirname(dir) !== DESIGN_LINKS_DIR) continue;
+      try {
+        const st = await fs.promises.lstat(dir);
+        if (Date.now() - st.mtimeMs < DESIGN_LINK_ORPHAN_GRACE_MS) continue;
+        await fs.promises.rm(dir, { recursive: true, force: true });
+        stats.orphanFolders++;
+      } catch (error) {
+        console.error('   Error removing a design link folder with no row:', error.code || error.message);
+        stats.errors.push({ folder: true, error: error.message });
+      }
+    }
+
+    if (stats.links || stats.orphanFolders) {
+      console.log(` Design links: removed ${stats.links} ended link(s) and ${stats.orphanFolders} folder(s) with no link`);
+    }
+  } catch (error) {
+    console.error(' Design link cleanup error:', error.message);
+    stats.errors.push({ general: error.message });
+  }
+
+  return stats;
+}
+
 // EXPORTS
 module.exports = {
   cleanupOldAnalytics,
+  cleanupDesignLinks,
   deleteUserAnalytics,
   getRetentionStats
 };

@@ -57,8 +57,6 @@ async function initializeReader() {
  * @returns {Object} Location object with city, region, country, country_code
  */
 async function getLocationFromIP(ip) {
-  console.log('getLocationFromIP called with IP:', ip);
-
   // Check if geolocation is disabled
   if (!config.geoLite2.enabled) {
     return {
@@ -103,7 +101,8 @@ async function getLocationFromIP(ip) {
       // We only collect city-level data for fraud prevention, not precise location
     };
   } catch (error) {
-    console.error('Error looking up IP in MaxMind database:', error.message);
+    // Log the error name only: MaxMind's message contains the IP address.
+    console.error('Error looking up IP in MaxMind database:', error && error.name);
 
     // Return unknown for any lookup errors
     return {

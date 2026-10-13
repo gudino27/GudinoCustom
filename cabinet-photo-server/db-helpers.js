@@ -5547,6 +5547,196 @@ const showroomDb = {
   }
 };
 
+// ============================================================================
+// DESIGN LINKS (private client 3D views sent from ____)
+// ============================================================================
+const DESIGN_LINK_UPDATE_FIELDS = {
+  title: 'title',
+  clientName: 'client_name',
+  studioJobId: 'studio_job_id',
+  priceText: 'price_text',
+  isActive: 'is_active',
+  activeUntil: 'active_until',
+  sceneBytes: 'scene_bytes',
+  manifestJson: 'manifest_json'
+};
+
+// Location strings that utils/geolocation.js returns instead of null
+const DESIGN_LINK_UNKNOWN_PLACES = new Set(['Unknown', 'Local', 'Localhost']);
+
+function designLinkPlace(value) {
+  if (typeof value !== 'string') return null;
+  const v = value.trim();
+  if (!v || DESIGN_LINK_UNKNOWN_PLACES.has(v)) return null;
+  return v;
+}
+
+const DESIGN_LINK_LIST_SQL = `
+  SELECT dl.*,
+    (SELECT COUNT(*) FROM design_link_views v WHERE v.link_id = dl.id) AS view_count,
+    (SELECT v.viewed_at FROM design_link_views v WHERE v.link_id = dl.id
+       ORDER BY v.viewed_at DESC, v.id DESC LIMIT 1) AS last_viewed_at,
+    (SELECT v.city FROM design_link_views v WHERE v.link_id = dl.id
+       ORDER BY v.viewed_at DESC, v.id DESC LIMIT 1) AS last_city
+  FROM design_links dl
+`;
+
+const designLinkDb = {
+  newToken() {
+    return crypto.randomBytes(32).toString('hex');
+  },
+
+  async create({ token, title, clientName = null, studioJobId = null, priceText = null,
+                 activeUntil, sceneBytes, manifestJson, createdBy = null }) {
+    const db = await getDb();
+    try {
+      const result = await db.run(
+        `INSERT INTO design_links (
+           token, title, client_name, studio_job_id, price_text,
+           is_active, active_until, scene_bytes, manifest_json, created_by
+         ) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?)`,
+        [token, title, clientName, studioJobId, priceText,
+         activeUntil, sceneBytes, manifestJson, createdBy]
+      );
+      return await db.get('SELECT * FROM design_links WHERE id = ?', [result.lastID]);
+    } finally {
+      await db.close();
+    }
+  },
+
+  // patch keys are camelCase; a value of null clears the column. Callers never
+  // pass a revision: it goes up by one when sceneBytes or manifestJson changes.
+  async update(id, patch = {}) {
+    const db = await getDb();
+    try {
+      const sets = [];
+      const values = [];
+      for (const [key, column] of Object.entries(DESIGN_LINK_UPDATE_FIELDS)) {
+        if (patch[key] !== undefined) {
+          sets.push(`${column} = ?`);
+          values.push(patch[key]);
+        }
+      }
+      if (patch.sceneBytes !== undefined || patch.manifestJson !== undefined) {
+        sets.push('revision = revision + 1');
+      }
+      sets.push('updated_at = CURRENT_TIMESTAMP');
+      values.push(id);
+      await db.run(`UPDATE design_links SET ${sets.join(', ')} WHERE id = ?`, values);
+      return await db.get('SELECT * FROM design_links WHERE id = ?', [id]);
+    } finally {
+      await db.close();
+    }
+  },
+
+  // Pure read: no counters are touched here.
+  async getByToken(token) {
+    const db = await getDb();
+    try {
+      return await db.get('SELECT * FROM design_links WHERE token = ?', [token]);
+    } finally {
+      await db.close();
+    }
+  },
+
+  async getById(id) {
+    const db = await getDb();
+    try {
+      return await db.get(`${DESIGN_LINK_LIST_SQL} WHERE dl.id = ?`, [id]);
+    } finally {
+      await db.close();
+    }
+  },
+
+  async listByJob(studioJobId) {
+    const db = await getDb();
+    try {
+      return await db.all(
+        `${DESIGN_LINK_LIST_SQL} WHERE dl.studio_job_id = ? ORDER BY dl.created_at DESC, dl.id DESC`,
+        [studioJobId]
+      );
+    } finally {
+      await db.close();
+    }
+  },
+
+  async listAll() {
+    const db = await getDb();
+    try {
+      return await db.all(`${DESIGN_LINK_LIST_SQL} ORDER BY dl.created_at DESC, dl.id DESC`);
+    } finally {
+      await db.close();
+    }
+  },
+
+  // Deletes the link and its views. Returns true when a row was removed.
+  async remove(id) {
+    const db = await getDb();
+    try {
+      await db.run('BEGIN TRANSACTION');
+      try {
+        await db.run('DELETE FROM design_link_views WHERE link_id = ?', [id]);
+        const result = await db.run('DELETE FROM design_links WHERE id = ?', [id]);
+        await db.run('COMMIT');
+        return result.changes > 0;
+      } catch (error) {
+        await db.run('ROLLBACK');
+        throw error;
+      }
+    } finally {
+      await db.close();
+    }
+  },
+
+  // Logs one view. notify is true for the first view, a view of a new
+  // revision, or a view more than 30 minutes after the previous one.
+  // Never throws: on error it returns { notify: false } so the page still loads.
+  async trackView(linkId, revision, userAgent = null, location = {}) {
+    let db;
+    try {
+      db = await getDb();
+      const previous = await db.get(
+        `SELECT revision, (julianday('now') - julianday(viewed_at)) * 1440 AS minutes_ago
+         FROM design_link_views WHERE link_id = ? ORDER BY viewed_at DESC, id DESC LIMIT 1`,
+        [linkId]
+      );
+      const loc = location || {};
+      await db.run(
+        `INSERT INTO design_link_views (link_id, revision, user_agent, city, region, country)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [linkId, revision, userAgent ? String(userAgent).slice(0, 512) : null,
+         designLinkPlace(loc.city), designLinkPlace(loc.region), designLinkPlace(loc.country)]
+      );
+      const notify = !previous ||
+        previous.revision !== revision ||
+        previous.minutes_ago > 30;
+      return { notify };
+    } catch (error) {
+      console.error('Error tracking design link view for link', linkId, error && error.message);
+      return { notify: false };
+    } finally {
+      if (db) await db.close();
+    }
+  },
+
+  async views(linkId) {
+    const db = await getDb();
+    try {
+      return await db.all(
+        `SELECT viewed_at, revision, city, region, country, user_agent
+         FROM design_link_views WHERE link_id = ? ORDER BY viewed_at DESC, id DESC`,
+        [linkId]
+      );
+    } finally {
+      await db.close();
+    }
+  },
+
+  isLive(link) {
+    return !!link && link.is_active === 1 && Date.parse(link.active_until) > Date.now();
+  }
+};
+
 module.exports = {
   getDb,
   queueDbOperation,
@@ -5561,5 +5751,6 @@ module.exports = {
   instagramOembedDb,
   timelineDb,
   appointmentDb,
-  showroomDb
+  showroomDb,
+  designLinkDb
 };

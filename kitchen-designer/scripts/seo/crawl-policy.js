@@ -70,6 +70,7 @@ const DISALLOWED = [
   '/api/',
   '/admin',
   '/reset-password',
+  '/view/',
   '/register/',
   '/invoice/',
   '/testimonial/',

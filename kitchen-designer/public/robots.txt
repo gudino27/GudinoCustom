@@ -37,6 +37,7 @@ Allow: /api/appointments/available-
 Disallow: /api/
 Disallow: /admin
 Disallow: /reset-password
+Disallow: /view/
 Disallow: /register/
 Disallow: /invoice/
 Disallow: /testimonial/

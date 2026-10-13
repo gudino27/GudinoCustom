@@ -72,6 +72,15 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
+  // Private client design links and staff requests are never cached: no
+  // respondWith, so the browser fetches them as if there were no worker
+  if (url.pathname.startsWith('/api/design-links/') ||
+      url.pathname.startsWith('/api/admin/') ||
+      request.headers.has('Authorization') ||
+      (request.mode === 'navigate' && url.pathname.startsWith('/view/'))) {
+    return;
+  }
+
   // Skip non-GET requests
   if (request.method !== 'GET') {
     return;

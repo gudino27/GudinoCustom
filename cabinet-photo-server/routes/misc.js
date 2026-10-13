@@ -393,26 +393,5 @@ router.get("/robots.txt", (req, res) => {
   res.set("Content-Type", "text/plain; charset=utf-8");
   res.send(buildRobotsTxt());
 });
-// List uploads directory (for debugging)
-router.get("/api/debug/uploads", async (req, res) => {
-  try {
-    const uploadsDir = path.join(__dirname, "uploads");
-    const categories = await fs.readdir(uploadsDir);
-
-    const structure = {};
-    for (const category of categories) {
-      const categoryPath = path.join(uploadsDir, category);
-      const stat = await fs.stat(categoryPath);
-      if (stat.isDirectory()) {
-        const files = await fs.readdir(categoryPath);
-        structure[category] = files;
-      }
-    }
-
-    res.json({ uploadsDir, structure });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
 // EXPORTS
 module.exports = router;
