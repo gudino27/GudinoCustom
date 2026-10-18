@@ -14,8 +14,8 @@ import {
   viewFov,
 } from './designLinkManifest';
 
-// The 3D half of the design-link page (/view/:token). The model is Studio's
-// scene.glb (Contract C4) and every light comes from the manifest (C5), which
+// The 3D half of the design-link page (/view/:token). The model is the desktop
+// app's scene.glb (Contract C4) and every light comes from the manifest (C5), which
 // DesignLinkViewer has already cleaned with normalizeManifest.
 //
 // Phones freeze for a second or more whenever three.js recompiles every
@@ -61,7 +61,7 @@ class SceneErrorBoundary extends Component {
 }
 
 // RoomEnvironment, prefiltered (sigma 0.04), as scene.environment; copied
-// from the homepage's StudioEnvironment, including its dispose
+// from the homepage kitchen's environment, including its dispose
 function SceneEnvironment({ intensity }) {
   const { gl, scene, invalidate } = useThree();
 
@@ -202,7 +202,7 @@ function buildRig(fixtures) {
   // three.js tracks a target's matrix only when it is in the scene
   group.add(sun, sun.target);
 
-  const sky = new THREE.HemisphereLight(0xffffff, 0xbfb6a4, 0);
+  const sky = new THREE.HemisphereLight(0xffffff, 0xffffff, 0);
   const ambient = new THREE.AmbientLight(0xffffff, 0);
   group.add(sky, ambient);
 
@@ -389,6 +389,7 @@ export default function DesignScene({
   viewSeq,
   reducedMotion,
   onLoaded,
+  onError,
   fallback,
   loadingLabel,
   canvasLabel,
@@ -411,7 +412,7 @@ export default function DesignScene({
   }), [startView]);
 
   return (
-    <SceneErrorBoundary key={url} fallback={fallback}>
+    <SceneErrorBoundary key={url} fallback={fallback} onError={onError}>
       <div className="design-link__scene" style={{ background: preset.background }}>
         <Canvas
           dpr={DPR}

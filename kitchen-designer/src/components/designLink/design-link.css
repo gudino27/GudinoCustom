@@ -71,6 +71,8 @@
   overflow-x: auto;
   overscroll-behavior-x: contain;
   -webkit-overflow-scrolling: touch;
+  /* a Tab-focused button scrolls in clear of the edge (DesignLinkViewer) */
+  scroll-padding-inline: 16px;
   padding: 8px 16px;
   padding-bottom: max(8px, env(safe-area-inset-bottom));
   padding-left: max(16px, env(safe-area-inset-left));

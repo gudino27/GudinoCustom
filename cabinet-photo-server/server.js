@@ -21,7 +21,7 @@ const {
 const { initializeDatabase } = require("./init-database");
 
 // Import middleware
-const { globalLimiter } = require("./middleware/rate-limiters");
+const { globalLimiter, isDesignLinkPath } = require("./middleware/rate-limiters");
 
 // Import routes
 const photosRoutes = require("./routes/photos");
@@ -170,6 +170,16 @@ app.use("/", appointmentsRoutes);
 app.use("/api/showroom", showroomRoutes);
 app.use("/", adminRoutes);
 app.use("/", miscRoutes);
+
+// Design link routes answer errors per their contract: JSON, no-store.
+// A malformed JSON body (express.json above) lands here. Other paths keep
+// Express's default error handling.
+app.use((err, req, res, next) => {
+  if (!isDesignLinkPath(req) || res.headersSent) return next(err);
+  console.error("Design link request error:", err && (err.type || err.code || err.name));
+  res.set("Cache-Control", "no-store");
+  return res.status(400).json({ error: "bad_upload" });
+});
 
 // Initialize database and start server
 const PORT = process.env.PORT || 3001;

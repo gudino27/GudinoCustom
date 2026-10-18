@@ -2847,14 +2847,6 @@ const invoiceDb = {
   },
 
   async trackInvoiceView(invoiceId, token, clientIp = null, userAgent = null, locationData = {}) {
-    console.log('💾 trackInvoiceView called with:', {
-      invoiceId,
-      token,
-      clientIp,
-      userAgent: userAgent ? userAgent.substring(0, 50) + '...' : null,
-      locationData
-    });
-
     const db = await getDb();
     try {
       // Get previous view stats and invoice update time before inserting new view
@@ -2882,8 +2874,6 @@ const invoiceDb = {
         locationData.city || null,
         locationData.timezone || null
       ];
-
-      console.log('💾 Inserting with params:', params);
 
       await db.run(`
         INSERT INTO invoice_views (invoice_id, token, client_ip, user_agent, country, region, city, timezone)
@@ -5690,16 +5680,22 @@ const designLinkDb = {
 
   // Logs one view. notify is true for the first view, a view of a new
   // revision, or a view more than 30 minutes after the previous one.
+  // A view of the same revision within 10 seconds of the link's previous one is
+  // a repeat (a reload, or the dev server's StrictMode double request): it is
+  // not logged and returns { notify: false }.
   // Never throws: on error it returns { notify: false } so the page still loads.
   async trackView(linkId, revision, userAgent = null, location = {}) {
     let db;
     try {
       db = await getDb();
       const previous = await db.get(
-        `SELECT revision, (julianday('now') - julianday(viewed_at)) * 1440 AS minutes_ago
+        `SELECT revision, (julianday('now') - julianday(viewed_at)) * 86400 AS seconds_ago
          FROM design_link_views WHERE link_id = ? ORDER BY viewed_at DESC, id DESC LIMIT 1`,
         [linkId]
       );
+      if (previous && previous.revision === revision && previous.seconds_ago < 10) {
+        return { notify: false };
+      }
       const loc = location || {};
       await db.run(
         `INSERT INTO design_link_views (link_id, revision, user_agent, city, region, country)
@@ -5709,7 +5705,7 @@ const designLinkDb = {
       );
       const notify = !previous ||
         previous.revision !== revision ||
-        previous.minutes_ago > 30;
+        previous.seconds_ago > 30 * 60;
       return { notify };
     } catch (error) {
       console.error('Error tracking design link view for link', linkId, error && error.message);

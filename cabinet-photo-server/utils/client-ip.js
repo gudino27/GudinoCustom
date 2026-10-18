@@ -16,7 +16,8 @@ function clientIp(req) {
   const cf = typeof header === 'string' ? header.trim() : '';
   if (!loggedHeaderPresence) {
     loggedHeaderPresence = true;
-    // Presence only, never the value (checked once on live, see Task 9)
+    // Presence only, never the value. On live this must say true: false means
+    // requests are not coming through Cloudflare and every visitor shares one key
     console.log(`cf-connecting-ip present: ${cf !== ''}`);
   }
   if (cf && net.isIP(cf)) return cf;

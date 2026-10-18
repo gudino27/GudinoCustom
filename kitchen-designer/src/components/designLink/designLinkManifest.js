@@ -32,11 +32,10 @@ export const LIGHT_COLOR_FALLBACK = '#ffffff';
 export const BACKGROUND_FALLBACK = '#d9d6cf';
 
 // Used only when a field is missing or not a finite number. The light
-// numbers are Studio's Daylight rig (C5 example).
+// numbers are the desktop app's Daylight rig (C5 example).
 const DEFAULTS = {
   fov: 50,
   skyIntensity: 0.12,
-  skyGround: '#bfb6a4',
   environmentIntensity: 0.42,
   exposure: 1,
   glow: 1,
@@ -64,23 +63,41 @@ export function color(v, fallback) {
 
 const str = (v) => (typeof v === 'string' && v.trim() !== '' ? v : null);
 
-// Positions further than this from the origin (metres) are treated as
-// invalid: a finite 1e308 would put a camera or light out of any view
-export const MAX_COORD = 1000;
+// Sanity cap for camera and fixture POSITIONS only: a position whose 3D
+// distance from the origin is more than this (metres) is treated as invalid,
+// because a finite 1e308 would put a camera or light out of any view. Targets,
+// directions, normals, bounds, centres and wall points only have to be finite.
+export const MAX_POSITION_DISTANCE = 1000;
 
+// The first n entries of `v` when they are all finite numbers, else null
 export function vec(v, n) {
   if (!Array.isArray(v) || v.length < n) return null;
   const out = v.slice(0, n);
-  return out.every((x) => isFiniteNumber(x) && Math.abs(x) <= MAX_COORD) ? out : null;
+  return out.every(isFiniteNumber) ? out : null;
 }
 
-// Unit vector, or null when it is missing, zero or not finite (C5: skip it)
+// vec(v, 3), or null when it is further than MAX_POSITION_DISTANCE from the
+// origin
+export function position(v) {
+  const p = vec(v, 3);
+  if (!p) return null;
+  const s = Math.max(...p.map(Math.abs));
+  // scaled so a large finite value cannot overflow to Infinity
+  const len = s === 0 ? 0 : s * Math.hypot(...p.map((x) => x / s));
+  return len <= MAX_POSITION_DISTANCE ? p : null;
+}
+
+// Unit vector, or null when it is missing, zero or not finite (C5: skip it).
+// Any finite length is accepted; it is scaled first so it cannot overflow.
 export function unit(v, n) {
   const a = vec(v, n);
   if (!a) return null;
-  const len = Math.hypot(...a);
+  const s = Math.max(...a.map(Math.abs));
+  if (!(s > 0)) return null;
+  const b = a.map((x) => x / s);
+  const len = Math.hypot(...b);
   if (!(len > 1e-9) || !Number.isFinite(len)) return null;
-  return a.map((x) => x / len);
+  return b.map((x) => x / len);
 }
 
 const sub = (a, b) => a.map((x, i) => x - b[i]);
@@ -116,7 +133,7 @@ export function halfDiagonal(b) {
 }
 
 // A view from outside the south-east corner, above the walls, looking at the
-// middle: used when Studio sent no usable camera for a room
+// middle: used when the desktop app sent no usable camera for a room
 export function defaultCamera(b, center) {
   const size = sub(b.max, b.min);
   const c = center || defaultCenter(b);
@@ -130,13 +147,13 @@ export function defaultCamera(b, center) {
 
 function normalizeCamera(c) {
   if (!c || typeof c !== 'object') return null;
-  const position = vec(c.position, 3);
+  const pos = position(c.position);
   const target = vec(c.target, 3);
-  if (!position || !target) return null;
+  if (!pos || !target) return null;
   return {
     name: str(c.name),
     room: typeof c.room === 'string' ? c.room : null,
-    position,
+    position: pos,
     target,
     fov: num(c.fov, LIMITS.fov, DEFAULTS.fov),
   };
@@ -180,7 +197,7 @@ function normalizePreset(p, id, groupIds) {
     sun,
     sky: {
       color: color(skySrc.color, LIGHT_COLOR_FALLBACK),
-      ground: color(skySrc.ground, DEFAULTS.skyGround),
+      ground: color(skySrc.ground, LIGHT_COLOR_FALLBACK),
       intensity: num(skySrc.intensity, LIMITS.sky, DEFAULTS.skyIntensity),
     },
     // missing = no ambient light (kept at 0 so the light count never changes)
@@ -217,14 +234,14 @@ function normalizeFixture(f, groupIds, roomIds) {
   if (roomIds.length === 1) room = roomIds[0];
   else if (typeof f.room === 'string' && roomIds.includes(f.room)) room = f.room;
   else return null;
-  const position = vec(f.position, 3);
+  const pos = position(f.position);
   const intensity = num(f.intensity, LIMITS[f.type], null);
-  if (!position || intensity === null) return null;
+  if (!pos || intensity === null) return null;
   const out = {
     type: f.type,
     group: f.group,
     room,
-    position,
+    position: pos,
     color: color(f.color, LIGHT_COLOR_FALLBACK),
     intensity,
   };

@@ -274,6 +274,20 @@ function checkManifest(textValue) {
   return m;
 }
 
+// The manifest as stored text. A very deeply nested manifest overflows
+// JSON.stringify's stack (RangeError): that is the sender's fault, not a 500.
+function manifestJson(m) {
+  try {
+    return JSON.stringify(m);
+  } catch (error) {
+    if (error instanceof RangeError) throw new ApiError(400, "bad_manifest", "manifest is nested too deeply");
+    throw error;
+  }
+}
+
+const GLB_CHUNK_JSON = 0x4e4f534a;
+const hasOwn = (o, key) => Object.prototype.hasOwnProperty.call(o, key);
+
 // C4 checks: GLB header, size and no external fetches
 function checkScene(file) {
   const bad = (message) => new ApiError(400, "bad_scene", message);
@@ -283,33 +297,56 @@ function checkScene(file) {
   if (buf.toString("latin1", 0, 4) !== "glTF") throw bad("scene is not a GLB");
   if (buf.readUInt32LE(4) !== 2) throw bad("scene is not glTF 2.0");
   if (buf.readUInt32LE(8) !== buf.length) throw bad("scene length does not match its header");
-  const jsonLength = buf.readUInt32LE(12);
-  if (buf.readUInt32LE(16) !== 0x4e4f534a || 20 + jsonLength > buf.length) {
-    throw bad("scene has no JSON chunk");
-  }
+
+  // Walk every chunk: exactly one JSON chunk, and it comes first. A loader
+  // would read a later JSON chunk too, past the checks below.
   let gltf;
-  try {
-    gltf = JSON.parse(buf.toString("utf8", 20, 20 + jsonLength));
-  } catch {
-    throw bad("scene JSON chunk does not parse");
+  let offset = 12;
+  let index = 0;
+  while (offset < buf.length) {
+    if (offset + 8 > buf.length) throw bad("scene has a truncated chunk");
+    const chunkLength = buf.readUInt32LE(offset);
+    const chunkType = buf.readUInt32LE(offset + 4);
+    const start = offset + 8;
+    const end = start + chunkLength;
+    if (end > buf.length) throw bad("scene has a truncated chunk");
+    if (chunkType === GLB_CHUNK_JSON) {
+      if (index !== 0) throw bad("scene has more than one JSON chunk");
+      try {
+        gltf = JSON.parse(buf.toString("utf8", start, end));
+      } catch {
+        throw bad("scene JSON chunk does not parse");
+      }
+    } else if (index === 0) {
+      throw bad("scene has no JSON chunk");
+    }
+    offset = end;
+    index += 1;
   }
+  if (gltf === undefined) throw bad("scene has no JSON chunk");
   if (!isPlainObject(gltf)) throw bad("scene JSON chunk is not an object");
-  if (gltf.images !== undefined && !(Array.isArray(gltf.images) && gltf.images.length === 0)) {
-    throw bad("scene has images");
+
+  if (gltf.images !== undefined) {
+    if (!Array.isArray(gltf.images)) throw bad("scene images is not an array");
+    if (gltf.images.length > 0) throw bad("scene has images");
   }
-  if (Array.isArray(gltf.buffers) && gltf.buffers.some((b) => isPlainObject(b) && b.uri !== undefined)) {
-    throw bad("scene has an external buffer uri");
+  if (gltf.buffers !== undefined) {
+    if (!Array.isArray(gltf.buffers)) throw bad("scene buffers is not an array");
+    if (gltf.buffers.some((b) => b !== null && typeof b === "object" && hasOwn(b, "uri"))) {
+      throw bad("scene has an external buffer uri");
+    }
   }
-  if (gltf.extensionsRequired !== undefined &&
-      !(Array.isArray(gltf.extensionsRequired) && gltf.extensionsRequired.length === 0)) {
-    throw bad("scene has extensionsRequired");
+  if (gltf.extensionsRequired !== undefined) {
+    if (!Array.isArray(gltf.extensionsRequired)) throw bad("scene extensionsRequired is not an array");
+    if (gltf.extensionsRequired.length > 0) throw bad("scene has extensionsRequired");
   }
   return buf;
 }
 
 function handleRouteError(res, error, linkId) {
   if (error instanceof ApiError) return sendError(res, error.status, error.code, error.message);
-  console.error("Design link route error", linkId != null ? `(link ${linkId})` : "", error && error.message);
+  // The code or name only: a message can hold a file path with the link's token
+  console.error("Design link route error", linkId != null ? `(link ${linkId})` : "", error && (error.code || error.name));
   return sendError(res, 500, "server_error");
 }
 
@@ -331,7 +368,7 @@ router.post("/admin/design-links", ...staffOnly, async (req, res) => {
     const manifestText = readManifestText(req);
     if (!sceneFile) throw new ApiError(400, "bad_scene", "scene is required");
     if (manifestText === undefined) throw new ApiError(400, "bad_upload", "scene without manifest");
-    const manifest = checkManifest(manifestText);
+    const storedManifest = manifestJson(checkManifest(manifestText));
     const sceneBuf = checkScene(sceneFile);
 
     const token = designLinkDb.newToken();
@@ -349,7 +386,7 @@ router.post("/admin/design-links", ...staffOnly, async (req, res) => {
       priceText: fields.priceText ?? null,
       activeUntil: new Date(Date.now() + minutes * 60 * 1000).toISOString(),
       sceneBytes: sceneBuf.length,
-      manifestJson: JSON.stringify(manifest),
+      manifestJson: storedManifest,
       createdBy: req.user && req.user.id ? req.user.id : null,
     });
     created = true;
@@ -376,7 +413,7 @@ router.put("/admin/design-links/:id", ...staffOnly, async (req, res) => {
     if (req.body && req.body.scene !== undefined) throw new ApiError(400, "bad_scene", "scene must be a file part");
     const manifestText = readManifestText(req);
     if (sceneFile && manifestText === undefined) throw new ApiError(400, "bad_upload", "scene without manifest");
-    const manifest = manifestText !== undefined ? checkManifest(manifestText) : undefined;
+    const storedManifest = manifestText !== undefined ? manifestJson(checkManifest(manifestText)) : undefined;
     const sceneBuf = sceneFile ? checkScene(sceneFile) : undefined;
 
     const patch = {};
@@ -388,7 +425,7 @@ router.put("/admin/design-links/:id", ...staffOnly, async (req, res) => {
     if (fields.activeMinutes !== undefined) {
       patch.activeUntil = new Date(Date.now() + fields.activeMinutes * 60 * 1000).toISOString();
     }
-    if (manifest !== undefined) patch.manifestJson = JSON.stringify(manifest);
+    if (storedManifest !== undefined) patch.manifestJson = storedManifest;
 
     if (sceneBuf) {
       const dir = linkDir(existing);
@@ -506,12 +543,17 @@ router.get("/design-links/:token", designLinkPublicLimiter, async (req, res) => 
       location
     );
 
+    // generator names the sending app: it stays private. Only that key is
+    // dropped, so optional fields C6 allows later still reach the page.
+    const publicManifest = { ...manifest };
+    delete publicManifest.generator;
+
     res.set("Cache-Control", "no-store");
     res.json({
       title: link.title,
       revision: link.revision,
       price_text: link.price_text === "" ? null : link.price_text ?? null,
-      manifest,
+      manifest: publicManifest,
       scene_url: `/api/design-links/${link.token}/scene.glb?r=${link.revision}`,
     });
 

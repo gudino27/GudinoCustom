@@ -8,15 +8,35 @@ const router = express.Router();
 const sharp = require("sharp");
 const path = require("path");
 const fs = require("fs").promises;
-const { employeeDb } = require("../db-helpers");
+const { employeeDb, userDb } = require("../db-helpers");
 const { authenticateUser, requireRole } = require("../middleware/auth");
 const { uploadMemory } = require("../middleware/upload");
 const { handleError } = require("../utils/error-handler");
 const { validateFileUpload, generateSafeFilename } = require("../utils/file-validation");
-// Get all employees
+// True when the request carries a valid session for an admin or super_admin.
+// Optional auth: no header or a bad token just means false, never a 401.
+async function isAdminRequest(req, res) {
+  const header = req.headers.authorization;
+  if (typeof header !== "string" || !header.startsWith("Bearer ")) return false;
+  const token = header.slice(7).trim();
+  if (!token) return false;
+  try {
+    const result = await userDb.validateSession(token);
+    if (!result) return false;
+    // validateSession may rotate the token; pass the new one on as authenticateUser does
+    if (result.newToken) res.setHeader("X-New-Token", result.newToken);
+    return ["admin", "super_admin"].includes(result.user && result.user.role);
+  } catch (error) {
+    console.error("Employees optional auth failed:", error && (error.code || error.name));
+    return false;
+  }
+}
+
+// Get all employees (public: active staff only; former staff with
+// includeInactive=true for a logged-in admin)
 router.get("", async (req, res) => {
   try {
-    const includeInactive = req.query.includeInactive === "true";
+    const includeInactive = req.query.includeInactive === "true" && (await isAdminRequest(req, res));
     const employees = await employeeDb.getAllEmployees(includeInactive);
     // Add full photo URL to each employee
     const employeesWithPhotos = employees.map((emp) => ({

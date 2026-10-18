@@ -15,10 +15,13 @@ RUN npm install
 # Copy application files
 COPY . .
 
-# Inject git commit into service worker cache name for automatic cache busting
-RUN sed -i "s/gudino-admin-v[0-9]*/gudino-admin-${GIT_COMMIT}/" public/sw.js
+# Append the git commit to the service worker cache name for automatic cache
+# busting. The version in public/sw.js is kept, so bumping it there still
+# gives a new name when GIT_COMMIT is not passed (it defaults to "dev").
+RUN sed -i "s/gudino-admin-v[0-9]*/&-${GIT_COMMIT}/" public/sw.js
 
-# Build the React app
+# Build the React app (no source maps: they would publish the source comments)
+ENV GENERATE_SOURCEMAP=false
 RUN npm run build
 
 # Production stage

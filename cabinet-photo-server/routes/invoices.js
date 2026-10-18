@@ -183,13 +183,9 @@ router.get("/:token", async (req, res) => {
     const userAgent = req.headers["user-agent"];
 
     const invoiceId = invoice.invoice_id;
-    console.log("🌐 Invoice view tracking - Invoice ID:", invoiceId);
-    console.log("🌐 Client IP:", clientIp);
-    console.log("🌐 User Agent:", userAgent);
 
     // Get location data from IP (non-blocking)
     const locationData = await getLocationFromIP(clientIp);
-    console.log("🌐 Location data received:", locationData);
 
     const viewInfo = await invoiceDb.trackInvoiceView(
       invoiceId,

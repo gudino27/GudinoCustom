@@ -38,6 +38,8 @@ backups/*
 cabinet-photo-server/database/cabinet_photos.db-wal
 cabinet-photo-server/database/cabinet_photos.db-shm
 cabinet-photo-server/uploads/*
+# Employee photos the old upload path wrote under routes/
+cabinet-photo-server/routes/uploads/employees/
 # CI/CD server-specific files
 webhook-config.json
 scripts/deploy.sh

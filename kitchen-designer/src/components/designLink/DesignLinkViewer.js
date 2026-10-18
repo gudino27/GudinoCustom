@@ -5,7 +5,7 @@ import { useLanguage } from '../../contexts/LanguageContext';
 import { announce } from '../ui/LiveRegion';
 import usePrefersReducedMotion from '../../hooks/usePrefersReducedMotion';
 import { normalizeManifest, PRESET_IDS } from './designLinkManifest';
-import { clearDesignLinkCaches } from './designLinkCache';
+import { clearDesignLinkCaches, deleteNow, openDesignLinkCaches } from './designLinkCache';
 import './design-link.css';
 
 // three.js and the scene load only once the link checks out
@@ -37,9 +37,42 @@ export default function DesignLinkViewer() {
   // seq makes a second tap on the same view fly back to it after orbiting
   const [view, setView] = useState({ index: 0, seq: 0 });
 
-  // An old service worker may have cached this page or its API: clear it
+  // An old service worker may have cached this page or its API: clear it on
+  // open, and again when the visitor leaves (even before the model loads).
+  // An unloading page stops before the full async sweep is done, so pagehide
+  // sends direct deletes for this link's URLs to caches opened in advance;
+  // the full sweep also runs when the page is hidden (tab or app switch).
   useEffect(() => {
-    clearDesignLinkCaches();
+    let openCaches = [];
+    let alive = true;
+    const sweep = () => clearDesignLinkCaches().then(() => openDesignLinkCaches()).then((list) => {
+      if (alive) openCaches = list;
+    });
+    sweep();
+    const linkUrls = () => {
+      const api = `${API_BASE}/api/design-links/${token}`;
+      return [window.location.href, api, `${api}/scene.glb`];
+    };
+    const onLeave = () => {
+      deleteNow(openCaches, linkUrls());
+      clearDesignLinkCaches();
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') sweep();
+    };
+    window.addEventListener('pagehide', onLeave);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      alive = false;
+      window.removeEventListener('pagehide', onLeave);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [token]);
+
+  // Narrow screens: a control reached by Tab in the sideways-scrolling bottom
+  // row is scrolled fully into view
+  const handleControlsFocus = useCallback((event) => {
+    event.target?.scrollIntoView?.({ inline: 'nearest', block: 'nearest' });
   }, []);
 
   // One fetch per mount (StrictMode mounts twice in development: the first
@@ -66,12 +99,14 @@ export default function DesignLinkViewer() {
         }
         if (!response.ok) {
           setStatus('error');
+          clearDesignLinkCaches();
           return;
         }
         const data = await response.json();
         const manifest = normalizeManifest(data?.manifest);
         if (!manifest || typeof data.scene_url !== 'string' || !data.scene_url.startsWith('/api/design-links/')) {
           setStatus('error');
+          clearDesignLinkCaches();
           return;
         }
         const preset = manifest.defaultPreset;
@@ -89,6 +124,7 @@ export default function DesignLinkViewer() {
       } catch (err) {
         if (err?.name === 'AbortError') return;
         setStatus('error');
+        clearDesignLinkCaches();
       }
     })();
     return () => controller.abort();
@@ -125,6 +161,11 @@ export default function DesignLinkViewer() {
   const handleLoaded = useCallback(() => {
     clearDesignLinkCaches();
     announce(tRef.current('designLink.loaded'));
+  }, []);
+
+  // the model failed (404/410 for the .glb, a parse error): clear too
+  const handleSceneError = useCallback(() => {
+    clearDesignLinkCaches();
   }, []);
 
   if (status !== 'ready') {
@@ -201,6 +242,7 @@ export default function DesignLinkViewer() {
               viewSeq={view.seq}
               reducedMotion={reducedMotion}
               onLoaded={handleLoaded}
+              onError={handleSceneError}
               fallback={errorCard}
               loadingLabel={t('designLink.loadingModel')}
               canvasLabel={t('designLink.canvasLabel')}
@@ -208,7 +250,7 @@ export default function DesignLinkViewer() {
           </Suspense>
         </div>
 
-        <nav className="design-link__controls" aria-label={t('designLink.controls')}>
+        <nav className="design-link__controls" aria-label={t('designLink.controls')} onFocus={handleControlsFocus}>
           <ControlGroup label={t('designLink.lighting')}>
             {PRESET_IDS.map((id) => (
               <ToggleButton key={id} pressed={presetId === id} onClick={() => choosePreset(id)}>

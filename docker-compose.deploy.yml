@@ -25,7 +25,7 @@ services:
           - backend  # Add alias so frontend can find it
     # Use different port for new instance during deployment
     ports:
-      - "3002:3001"
+      - "127.0.0.1:3002:3001"
 
   frontend-new:
     build:
@@ -39,7 +39,7 @@ services:
       - app-network
     # Use different port for new instance during deployment
     ports:
-      - "8080:80"
+      - "127.0.0.1:8088:80"
 
 networks:
   app-network:

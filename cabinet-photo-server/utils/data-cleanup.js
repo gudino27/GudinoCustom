@@ -191,14 +191,7 @@ async function getRetentionStats() {
   return stats;
 }
 
-/**
- * Clean up private client design links (180-day retention)
- * Every link whose active_until is more than 180 days ago loses its views,
- * its row and its folder. Folders under uploads/design-links/ with no row are
- * removed too. Runs at startup and once a day (server.js). No VACUUM.
- * Logs link ids only, never tokens.
- * @returns {Promise<Object>} Cleanup statistics
- */
+// Private client design links
 const DESIGN_LINKS_DIR = path.join(__dirname, '..', 'uploads', 'design-links');
 const DESIGN_LINK_TOKEN_RE = /^[a-f0-9]{64}$/;
 const DESIGN_LINK_RETENTION_DAYS = 180;
@@ -211,6 +204,14 @@ function designLinkFolder(token) {
   return path.dirname(dir) === DESIGN_LINKS_DIR ? dir : null;
 }
 
+/**
+ * Clean up private client design links (180-day retention)
+ * Every link whose active_until is more than 180 days ago loses its views,
+ * its row and its folder. Folders under uploads/design-links/ with no row are
+ * removed too. Runs at startup and once a day (server.js). No VACUUM.
+ * Logs link ids only, never tokens.
+ * @returns {Promise<Object>} Cleanup statistics
+ */
 async function cleanupDesignLinks() {
   const { getDb: getHelperDb, designLinkDb } = require('../db-helpers');
   const stats = { links: 0, orphanFolders: 0, errors: [] };

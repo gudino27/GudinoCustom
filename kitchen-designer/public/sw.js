@@ -1,7 +1,7 @@
 // Service Worker for Gudino Custom Admin Panel PWA
 // Network-first strategy for always-online experience
 
-const CACHE_NAME = 'gudino-admin-v2'; // Updated version to force cache refresh
+const CACHE_NAME = 'gudino-admin-v3'; // bump to drop older caches: activate deletes every other cache name (the Dockerfile appends the commit)
 const OFFLINE_URL = '/offline.html';
 const API_BASE = 'https://api.gudinocustom.com';
 

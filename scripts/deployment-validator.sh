@@ -12,7 +12,7 @@ NC='\033[0m'
 # Configuration
 FRONTEND_URL="http://localhost"
 BACKEND_URL="http://localhost:3001"
-STAGING_FRONTEND_URL="http://localhost:8080"
+STAGING_FRONTEND_URL="http://localhost:8088"
 STAGING_BACKEND_URL="http://localhost:3002"
 TIMEOUT=30
 
