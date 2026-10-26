@@ -5,35 +5,31 @@ const CACHE_NAME = 'gudino-admin-v3'; // bump to drop older caches: activate del
 const OFFLINE_URL = '/offline.html';
 const API_BASE = 'https://api.gudinocustom.com';
 
-// Assets to cache immediately
+// Assets to cache immediately. Only files that exist in the production
+// build: the hashed JS and CSS are cached as they are fetched. (The dev-only
+// /static/js/bundle.js and /static/css/main.css used to be listed here; their
+// 404 failed the whole addAll, so the offline page was never cached.)
 const STATIC_ASSETS = [
   '/',
   '/admin',
-  '/static/js/bundle.js',
-  '/static/css/main.css',
   '/manifest.json',
   '/apple-touch-icon.png',
   '/android-chrome-192x192.png',
-  '/android-chrome-512x512.png',
-  OFFLINE_URL 
+  '/android-chrome-512x512.png'
 ];
 
-// Install event - cache static assets
+// Install event - cache the offline page first, then each asset on its own,
+// so one missing file does not stop the rest
 self.addEventListener('install', (event) => {
 
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then((cache) => {
-        return cache.addAll(STATIC_ASSETS.filter(url => url !== OFFLINE_URL));
-      })
-      .then(() => {
-        // Cache offline page separately to handle errors gracefully
-        return caches.open(CACHE_NAME)
-          .then(cache => cache.add(new Request(OFFLINE_URL, { cache: 'reload' })));
-      })
-      .catch((error) => {
-        console.warn('[SW] Failed to cache some assets:', error);
-      })
+    caches.open(CACHE_NAME).then((cache) =>
+      cache.add(new Request(OFFLINE_URL, { cache: 'reload' }))
+        .catch((error) => console.warn('[SW] Failed to cache the offline page:', error))
+        .then(() => Promise.all(STATIC_ASSETS.map((url) =>
+          cache.add(url).catch(() => console.warn('[SW] Not cached:', url))
+        )))
+    )
   );
 
   // Removed self.skipWaiting() - only skip when user clicks "Update" button

@@ -110,6 +110,10 @@
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('/sw.js')
           .then((registration) => {
+            // A worker already waiting (from an earlier visit, or Later)
+            if (registration.waiting && navigator.serviceWorker.controller) {
+              applyUpdate(registration.waiting);
+            }
             // Check for updates periodically (every 2 hours, not on every load)
             // Also check visibility to avoid updates when page is hidden
             setInterval(() => {
@@ -131,8 +135,7 @@
               if (newWorker) {
                 newWorker.addEventListener('statechange', () => {
                   if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                    // Show notification instead of auto-reloading
-                    showUpdateNotification(newWorker);
+                    applyUpdate(newWorker);
                   }
                 });
               }
@@ -142,6 +145,21 @@
             console.error('Service worker registration failed:', registrationError);
           });
       });
+
+      // A new version in a browser tab takes over quietly: the worker
+      // activates (its activate step drops the old caches) but the page is not
+      // reloaded, so nothing being typed is lost and the next page load uses
+      // the new version. The installed app (standalone) keeps the Update /
+      // Later prompt, where a switch could interrupt work.
+      function applyUpdate(worker) {
+        const standalone = window.matchMedia('(display-mode: standalone)').matches ||
+          window.navigator.standalone === true;
+        if (standalone) {
+          showUpdateNotification(worker);
+        } else {
+          worker.postMessage({ type: 'SKIP_WAITING' });
+        }
+      }
 
       // Show a notification when update is available. It stays until the
       // visitor chooses Update or Later (no time limit, WCAG 2.2.1) and is
