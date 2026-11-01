@@ -8,6 +8,7 @@
 require("dotenv").config();
 const jwt = require("jsonwebtoken");
 const { userDb } = require("../db-helpers");
+const { reportBlockedAttempt } = require("../utils/security-alerts");
 const JWT_SECRET = process.env.JWT_SECRET;
 const authenticateUser = async (req, res, next) => {
   const token = req.headers.authorization?.replace("Bearer ", "");
@@ -48,6 +49,7 @@ const requireRole = (allowedRoles) => {
     const roles = Array.isArray(allowedRoles) ? allowedRoles : [allowedRoles];
 
     if (!roles.includes(userRole)) {
+      reportBlockedAttempt(req);
       return res.status(403).json({ error: "Insufficient permissions" });
     }
 
@@ -62,6 +64,7 @@ const isSuperAdmin = (req, res, next) => {
   }
 
   if (req.user.role !== 'super_admin') {
+    reportBlockedAttempt(req);
     return res.status(403).json({ error: "Super admin access required" });
   }
 
@@ -75,6 +78,7 @@ const isAdminOrSuperAdmin = (req, res, next) => {
   }
 
   if (req.user.role !== 'admin' && req.user.role !== 'super_admin') {
+    reportBlockedAttempt(req);
     return res.status(403).json({ error: "Admin access required" });
   }
 

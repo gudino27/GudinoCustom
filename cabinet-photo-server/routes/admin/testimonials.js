@@ -3,12 +3,14 @@
 const express = require("express");
 const router = express.Router();
 const { authenticateUser, requireRole } = require("../../middleware/auth");
+
+const adminOnly = requireRole(["admin", "super_admin"]);
 const { uploadMemory } = require("../../middleware/upload");
 const { getDb, queueDbOperation, testimonialDb } = require("../../db-helpers");
 const { emailTransporter } = require("../../utils/email");
 const { twilioClient } = require("../../utils/sms");
 // Admin endpoint - Send testimonial link
-router.post("/send-testimonial-link",authenticateUser,async (req, res) => {
+router.post("/send-testimonial-link",authenticateUser, adminOnly,async (req, res) => {
     try {
       const { client_name, client_email, client_phone, project_type, send_via = "email" } = req.body;
 
@@ -102,7 +104,7 @@ router.post("/send-testimonial-link",authenticateUser,async (req, res) => {
   }
 );
 // Admin endpoint - Get all testimonials
-router.get("/testimonials", authenticateUser, async (req, res) => {
+router.get("/testimonials", authenticateUser, adminOnly, async (req, res) => {
   try {
     const testimonials = await testimonialDb.getAllTestimonials(false);
     res.json(testimonials);
@@ -112,7 +114,7 @@ router.get("/testimonials", authenticateUser, async (req, res) => {
   }
 });
 // Admin endpoint - Get testimonial tokens with status filtering
-router.get("/testimonial-tokens", authenticateUser, async (req, res) => {
+router.get("/testimonial-tokens", authenticateUser, adminOnly, async (req, res) => {
   try {
     const { status } = req.query;
     const tokens = await testimonialDb.getTokens(null, status);
@@ -124,7 +126,7 @@ router.get("/testimonial-tokens", authenticateUser, async (req, res) => {
 });
 
 // Admin endpoint - Get tracking data for a specific token
-router.get("/testimonial-tokens/:token/tracking", authenticateUser, async (req, res) => {
+router.get("/testimonial-tokens/:token/tracking", authenticateUser, adminOnly, async (req, res) => {
   try {
     const { token } = req.params;
     const limit = parseInt(req.query.limit) || 20;
@@ -138,7 +140,7 @@ router.get("/testimonial-tokens/:token/tracking", authenticateUser, async (req, 
   }
 });
 // Admin endpoint - Delete testimonial token
-router.delete("/testimonial-tokens/:token",authenticateUser,async (req, res) => {
+router.delete("/testimonial-tokens/:token",authenticateUser, adminOnly,async (req, res) => {
     try {
       const { token } = req.params;
       await testimonialDb.deleteToken(token);
@@ -150,7 +152,7 @@ router.delete("/testimonial-tokens/:token",authenticateUser,async (req, res) => 
   }
 );
 // Admin endpoint - Update testimonial visibility
-router.put("/testimonials/:id/visibility",authenticateUser,async (req, res) => {
+router.put("/testimonials/:id/visibility",authenticateUser, adminOnly,async (req, res) => {
     try {
       const { is_visible } = req.body;
       await testimonialDb.updateTestimonialVisibility(
@@ -167,7 +169,7 @@ router.put("/testimonials/:id/visibility",authenticateUser,async (req, res) => {
   }
 );
 // Admin endpoint - Delete testimonial (super admin only)
-router.delete("/testimonials/:id",authenticateUser,async (req, res) => {
+router.delete("/testimonials/:id",authenticateUser, adminOnly,async (req, res) => {
     try {
       if (req.user.role !== "super_admin") {
         return res.status(403).json({ error: "Super admin access required" });
@@ -197,7 +199,7 @@ router.delete("/testimonials/:id",authenticateUser,async (req, res) => {
   }
 );
 // Admin endpoint - Get testimonial analytics
-router.get("/testimonial-analytics",authenticateUser,async (req, res) => {
+router.get("/testimonial-analytics",authenticateUser, adminOnly,async (req, res) => {
     try {
       const dateRange = parseInt(req.query.days) || 30;
       const db = await getDb();

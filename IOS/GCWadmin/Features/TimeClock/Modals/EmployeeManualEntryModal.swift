@@ -34,7 +34,6 @@ struct EmployeeManualEntryModal: View {
                     DatePicker(
                         "Select Date",
                         selection: $date,
-                        in: ...Date(),
                         displayedComponents: .date
                     )
                     .datePickerStyle(.compact)
@@ -148,9 +147,7 @@ struct EmployeeManualEntryModal: View {
     // MARK: - Validation
 
     private var isValid: Bool {
-        guard clockOutTime > clockInTime else { return false }
-        guard date <= Date() else { return false }
-        return true
+        return abs(clockOutTime.timeIntervalSince(clockInTime)) >= 60
     }
 
     // MARK: - Actions
@@ -196,7 +193,9 @@ struct EmployeeManualEntryModal: View {
     }
 
     private func calculateTotalHours() -> Double? {
-        let timeInterval = clockOutTime.timeIntervalSince(clockInTime)
+        // Clock out before clock in means the shift ran past midnight
+        let difference = clockOutTime.timeIntervalSince(clockInTime)
+        let timeInterval = difference > 0 ? difference : difference + 86400
         let breakMins = Double(breakMinutes) ?? 0
         let totalMinutes = (timeInterval / 60) - breakMins
         return totalMinutes / 60.0

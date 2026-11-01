@@ -2,6 +2,7 @@ const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const { open } = require('sqlite');
 const bcrypt = require('bcryptjs');
+const { recalcAllWeeks } = require('./utils/weekly-overtime');
 
 async function initializeDatabase() {
   console.log('Starting database initialization...\n');
@@ -67,6 +68,12 @@ async function initializeDatabase() {
 
     console.log(' Adding client design link tables...');
     await addDesignLinkTables(db);
+
+    console.log(' Adding time entry approvals...');
+    await addTimeEntryApprovals(db);
+
+    console.log(' Adding notifications table...');
+    await addNotificationTables(db);
 
     console.log('\n✅ Database initialization completed successfully!');
 
@@ -1372,6 +1379,34 @@ async function addInvoiceTables(db) {
   `);
 
   console.log(' Created invoice system tables and default data');
+}
+
+// Employee changes wait here as JSON until a manager decides. The first run also
+// moves overtime from the old 8-hours-a-shift split to 40 hours a week.
+async function addTimeEntryApprovals(db) {
+  const columns = await db.all('PRAGMA table_info(time_clock_entries)');
+  if (columns.some((column) => column.name === 'pending_changes')) return;
+
+  await db.exec('ALTER TABLE time_clock_entries ADD COLUMN pending_changes TEXT');
+  await recalcAllWeeks(db);
+}
+
+async function addNotificationTables(db) {
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS notifications (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id    INTEGER NOT NULL REFERENCES users(id),
+      type       TEXT NOT NULL,
+      title      TEXT NOT NULL,
+      body       TEXT,
+      entry_id   INTEGER,
+      dedupe_key TEXT,
+      read_at    DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await db.exec('CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, read_at)');
+  await db.exec('CREATE INDEX IF NOT EXISTS idx_notifications_dedupe ON notifications(dedupe_key, created_at)');
 }
 
 // Private client design links (3D views sent from ____).

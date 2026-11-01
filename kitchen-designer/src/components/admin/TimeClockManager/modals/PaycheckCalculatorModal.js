@@ -1,10 +1,12 @@
 import React from 'react';
+import { AlertTriangle, Calculator } from 'lucide-react';
 import { calculateCurrentPayPeriodAmount } from '../utils/payrollCalculations';
 
 const PaycheckCalculatorModal = ({
   show,
   payrollInfo,
   payPeriodHours,
+  payPeriodOvertime,
   employeeTaxRate,
   setEmployeeTaxRate,
   onSaveTaxRate,
@@ -21,7 +23,9 @@ const PaycheckCalculatorModal = ({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="modal-header">
-          <h3>{t("timeclock.paycheck_calculator_title")}</h3>
+          <h3 style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <Calculator size={22} /> {t("timeclock.paycheck_calculator_title")}
+          </h3>
           <button className="btn-close" onClick={onClose}>
             ×
           </button>
@@ -36,7 +40,7 @@ const PaycheckCalculatorModal = ({
                 <div className="breakdown-item">
                   <span>
                     {t("timeclock.regular_hours")}:{" "}
-                    {Math.min(payPeriodHours, 40).toFixed(6)}{" "}
+                    {(payPeriodHours - payPeriodOvertime).toFixed(6)}{" "}
                     {t("timeclock.hrs")}
                   </span>
                   <span>
@@ -46,16 +50,16 @@ const PaycheckCalculatorModal = ({
                   <span className="amount">
                     $
                     {(
-                      Math.min(payPeriodHours, 40) *
+                      (payPeriodHours - payPeriodOvertime) *
                       (payrollInfo.hourly_rate || 0)
                     ).toFixed(2)}
                   </span>
                 </div>
-                {payPeriodHours > 40 && (
+                {payPeriodOvertime > 0 && (
                   <div className="breakdown-item">
                     <span>
                       {t("timeclock.overtime_hours")}:{" "}
-                      {(payPeriodHours - 40).toFixed(6)} {t("timeclock.hrs")}
+                      {payPeriodOvertime.toFixed(6)} {t("timeclock.hrs")}
                     </span>
                     <span>
                       @ ${payrollInfo.overtime_rate?.toFixed(2)}
@@ -64,7 +68,7 @@ const PaycheckCalculatorModal = ({
                     <span className="amount">
                       $
                       {(
-                        (payPeriodHours - 40) *
+                        payPeriodOvertime *
                         (payrollInfo.overtime_rate || 0)
                       ).toFixed(2)}
                     </span>
@@ -76,7 +80,8 @@ const PaycheckCalculatorModal = ({
                     $
                     {calculateCurrentPayPeriodAmount(
                       payrollInfo,
-                      payPeriodHours
+                      payPeriodHours,
+                      payPeriodOvertime
                     ).toFixed(2)}
                   </strong>
                 </div>
@@ -89,7 +94,8 @@ const PaycheckCalculatorModal = ({
                     $
                     {calculateCurrentPayPeriodAmount(
                       payrollInfo,
-                      payPeriodHours
+                      payPeriodHours,
+                      payPeriodOvertime
                     ).toFixed(2)}
                   </span>
                 </div>
@@ -99,7 +105,8 @@ const PaycheckCalculatorModal = ({
                     $
                     {calculateCurrentPayPeriodAmount(
                       payrollInfo,
-                      payPeriodHours
+                      payPeriodHours,
+                      payPeriodOvertime
                     ).toFixed(2)}
                   </strong>
                 </div>
@@ -164,7 +171,8 @@ const PaycheckCalculatorModal = ({
                   {(
                     calculateCurrentPayPeriodAmount(
                       payrollInfo,
-                      payPeriodHours
+                      payPeriodHours,
+                      payPeriodOvertime
                     ) *
                     (employeeTaxRate / 100)
                   ).toFixed(2)}
@@ -182,13 +190,17 @@ const PaycheckCalculatorModal = ({
                 {(
                   calculateCurrentPayPeriodAmount(
                     payrollInfo,
-                    payPeriodHours
+                    payPeriodHours,
+                    payPeriodOvertime
                   ) *
                   (1 - employeeTaxRate / 100)
                 ).toFixed(2)}
               </h3>
             </div>
-            <p className="disclaimer">{t("timeclock.estimate_disclaimer")}</p>
+            <p className="disclaimer" style={{ display: "flex", gap: "0.5rem" }}>
+              <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: 1 }} />
+              <span>{t("timeclock.estimate_disclaimer")}</span>
+            </p>
           </div>
         </div>
 

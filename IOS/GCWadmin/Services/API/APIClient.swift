@@ -225,8 +225,12 @@ class APIClient {
                 break // Success
             case 401:
                 throw APIError.unauthorized
-            case 403:
-                throw APIError.forbidden
+            case 400, 403:
+                if let errorResponse = try? decoder.decode(APIResponse<String>.self, from: data),
+                   let message = errorResponse.message ?? errorResponse.error {
+                    throw APIError.serverError(message)
+                }
+                throw httpResponse.statusCode == 403 ? APIError.forbidden : APIError.unknown
             case 404:
                 throw APIError.notFound
             case 500...599:

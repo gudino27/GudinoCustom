@@ -261,7 +261,11 @@ class TimeClockViewModel: ObservableObject {
             return nil
         }
 
-        return service.calculatePayPeriodEarnings(payrollInfo: payrollInfo, hours: hours)
+        return service.calculatePayPeriodEarnings(
+            payrollInfo: payrollInfo,
+            hours: hours,
+            overtimeHours: payPeriod?.overtimeHours ?? 0
+        )
     }
 
     func calculateNetPay(grossPay: Double) -> Double {
@@ -312,7 +316,7 @@ class TimeClockViewModel: ObservableObject {
 
         } catch {
             print("❌ Failed to add manual entry: \(error)")
-            errorMessage = "Failed to add manual entry. Please try again."
+            errorMessage = error.localizedDescription
         }
 
         actionInProgress = false

@@ -74,6 +74,7 @@ private let translations: [String: [Language: String]] = [
     "photos": [.english: "Photos", .spanish: "Fotos"],
     "employees": [.english: "Employees", .spanish: "Empleados"],
     "timeclock": [.english: "Time Clock", .spanish: "Reloj de Tiempo"],
+    "notifications": [.english: "Notifications", .spanish: "Notificaciones"],
     "designs": [.english: "Designs", .spanish: "Diseños"],
     "invoices": [.english: "Invoices", .spanish: "Facturas"],
     "testimonials": [.english: "Testimonials", .spanish: "Testimonios"],

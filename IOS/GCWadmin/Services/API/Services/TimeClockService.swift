@@ -210,7 +210,8 @@ class TimeClockService {
             payDate: backendPeriod.payDate,
             periodType: backendPeriod.periodType,
             hours: hours,
-            earnings: earnings
+            earnings: earnings,
+            overtimeHours: Double(summary.overtimeHours)
         )
     }
 
@@ -416,7 +417,12 @@ class TimeClockService {
         )
     }
 
-    /// Add manual entry (admin only)
+    /// The employee form sends HH:mm and the admin form HH:mm:ss
+    private func withSeconds(_ time: String) -> String {
+        return time.count == 5 ? "\(time):00" : time
+    }
+
+    /// Add a manual entry; employees add their own, admins anyone's
     func addManualEntry(request: ManualEntryRequest) async throws {
         struct WebappManualEntryRequest: Codable {
             let employeeId: String
@@ -438,8 +444,8 @@ class TimeClockService {
         let webappRequest = WebappManualEntryRequest(
             employeeId: String(request.userId),
             employeeName: "", // Will be filled by backend
-            clockInTime: "\(request.date) \(request.timeIn):00",
-            clockOutTime: "\(request.date) \(request.timeOut):00",
+            clockInTime: "\(request.date) \(withSeconds(request.timeIn))",
+            clockOutTime: "\(request.date) \(withSeconds(request.timeOut))",
             breakMinutes: request.breakMinutes,
             reason: "Employee forgot to clock in/out",
             notes: request.notes ?? "[Manual Entry] Added via mobile app"
@@ -493,13 +499,21 @@ class TimeClockService {
 
     /// Get employee entries (admin only)
     func getEmployeeEntries(employeeId: Int, startDate: String, endDate: String) async throws -> [TimeEntry] {
-        return try await apiClient.get(
-            "/api/timeclock/admin/employee-entries/\(employeeId)",
+        struct AdminEntriesResponse: Decodable {
+            let success: Bool
+            let entries: [CamelCaseTimeEntry]
+        }
+
+        let response: AdminEntriesResponse = try await apiClient.get(
+            "/api/timeclock/admin/entries",
             queryItems: [
-                URLQueryItem(name: "start_date", value: startDate),
-                URLQueryItem(name: "end_date", value: endDate)
+                URLQueryItem(name: "employeeId", value: String(employeeId)),
+                URLQueryItem(name: "startDate", value: startDate),
+                URLQueryItem(name: "endDate", value: endDate),
+                URLQueryItem(name: "limit", value: "500")
             ]
         )
+        return response.entries.map { $0.toTimeEntry() }
     }
 
     /// Update payroll info (admin only)
@@ -563,14 +577,13 @@ class TimeClockService {
     // MARK: - Utility Methods
 
     /// Calculate earnings for current pay period
-    func calculatePayPeriodEarnings(payrollInfo: PayrollInfo, hours: Double) -> Double {
+    func calculatePayPeriodEarnings(payrollInfo: PayrollInfo, hours: Double, overtimeHours: Double) -> Double {
         switch payrollInfo.employmentType {
         case .hourly:
             guard let hourlyRate = payrollInfo.hourlyRate else { return 0 }
             let overtimeRate = payrollInfo.overtimeRate ?? (hourlyRate * 1.5)
 
-            let regularHours = min(hours, 40)
-            let overtimeHours = max(hours - 40, 0)
+            let regularHours = hours - overtimeHours
 
             return (regularHours * hourlyRate) + (overtimeHours * overtimeRate)
 

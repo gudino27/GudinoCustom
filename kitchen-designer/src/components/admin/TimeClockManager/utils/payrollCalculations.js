@@ -1,10 +1,10 @@
 // Helper to calculate current pay period earnings
-export const calculateCurrentPayPeriodAmount = (payrollInfo, hours) => {
+// overtimeHours comes from the entries: anything past 40 in a Sunday-Saturday week
+export const calculateCurrentPayPeriodAmount = (payrollInfo, hours, overtimeHours = 0) => {
   if (!payrollInfo || hours === 0) return 0;
 
   if (payrollInfo.employment_type === "hourly") {
-    const regularHours = Math.min(hours, 40);
-    const overtimeHours = Math.max(hours - 40, 0);
+    const regularHours = hours - overtimeHours;
     const regularPay = regularHours * (payrollInfo.hourly_rate || 0);
     const overtimePay = overtimeHours * (payrollInfo.overtime_rate || 0);
     return regularPay + overtimePay;

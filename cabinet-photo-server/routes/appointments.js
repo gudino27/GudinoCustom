@@ -1,6 +1,7 @@
 // Appointment Booking Routes
 // Handles appointment creation, management, and employee availability
 
+const moment = require('moment-timezone');
 const express = require('express');
 const router = express.Router();
 const { appointmentDb, employeeDb } = require('../db-helpers');
@@ -75,6 +76,47 @@ router.get('/api/appointments/available-dates/:year/:month', async (req, res) =>
 });
 
 // Get available time slots for a specific date
+// The open times for a date (YYYY-MM-DD), as shown to the person booking
+async function findOpenSlots(date, durationMinutes) {
+  // Parse date properly to avoid timezone issues
+  // Date format is YYYY-MM-DD, parse as local date
+  const [year, month, day] = date.split('-').map(Number);
+  const localDate = new Date(year, month - 1, day);
+  const dayOfWeek = localDate.getDay();
+
+  // Get all employee availability for the day of week
+  const availability = await appointmentDb.getEmployeeAvailabilityByDay(dayOfWeek);
+
+  if (!availability || availability.length === 0) {
+    return { slots: [], generatedSlots: [] };
+  }
+
+  // Get existing appointments for this date
+  const existingAppointments = await appointmentDb.getAppointmentsByDate(date);
+
+  // Get blocked times for this date
+  const blockedTimes = await appointmentDb.getBlockedTimesByDate(date);
+
+  // Generate available time slots
+  const generatedSlots = generateTimeSlots(
+    availability,
+    existingAppointments,
+    blockedTimes,
+    date,
+    durationMinutes
+  );
+
+  // Format slots as 24-hour time strings for the frontend (HH:MM format)
+  const slots = generatedSlots.map(slot => {
+    const slotDate = new Date(slot.time);
+    const hours = slotDate.getHours().toString().padStart(2, '0');
+    const minutes = slotDate.getMinutes().toString().padStart(2, '0');
+    return `${hours}:${minutes}`;
+  });
+
+  return { slots, generatedSlots };
+}
+
 // Supports both path param (/available-slots/:date) and query param (?date=...)
 const getAvailableSlotsHandler = async (req, res) => {
   try {
@@ -85,51 +127,8 @@ const getAvailableSlotsHandler = async (req, res) => {
       return res.status(400).json({ error: 'Date is required' });
     }
 
-    const durationMinutes = parseInt(duration) || 60;
-
-    // Parse date properly to avoid timezone issues
-    // Date format is YYYY-MM-DD, parse as local date
-    const [year, month, day] = date.split('-').map(Number);
-    const localDate = new Date(year, month - 1, day);
-    const dayOfWeek = localDate.getDay();
-
-    console.log(`Fetching slots for date: ${date}, dayOfWeek: ${dayOfWeek}`);
-
-    // Get all employee availability for the day of week
-    const availability = await appointmentDb.getEmployeeAvailabilityByDay(dayOfWeek);
-
-    console.log(`Found ${availability?.length || 0} availability records for day ${dayOfWeek}`);
-
-    if (!availability || availability.length === 0) {
-      return res.json({ slots: [], availableSlots: [] });
-    }
-
-    // Get existing appointments for this date
-    const existingAppointments = await appointmentDb.getAppointmentsByDate(date);
-
-    // Get blocked times for this date
-    const blockedTimes = await appointmentDb.getBlockedTimesByDate(date);
-
-    // Generate available time slots
-    const generatedSlots = generateTimeSlots(
-      availability,
-      existingAppointments,
-      blockedTimes,
-      date,
-      durationMinutes
-    );
-
-    // Format slots as 24-hour time strings for the frontend (HH:MM format)
-    const slots = generatedSlots.map(slot => {
-      const slotDate = new Date(slot.time);
-      const hours = slotDate.getHours().toString().padStart(2, '0');
-      const minutes = slotDate.getMinutes().toString().padStart(2, '0');
-      return `${hours}:${minutes}`;
-    });
-
-    console.log(`Generated ${slots.length} time slots`);
-
     // Return both formats for compatibility
+    const { slots, generatedSlots } = await findOpenSlots(date, parseInt(duration) || 60);
     res.json({ slots, availableSlots: generatedSlots });
   } catch (error) {
     handleError(error, 'Failed to fetch available slots', res, 500);
@@ -173,6 +172,17 @@ router.post('/api/appointments/book', async (req, res) => {
       return res.status(400).json({
         error: 'Invalid appointment_type. Must be one of: consultation, measurement, estimate, followup',
       });
+    }
+
+    // The page sends UTC; open slots are shop clock times
+    const requested = moment(appointment_date).tz('America/Los_Angeles');
+    if (!requested.isValid()) {
+      return res.status(400).json({ error: 'Invalid appointment_date' });
+    }
+
+    const { slots } = await findOpenSlots(requested.format('YYYY-MM-DD'), parseInt(duration) || 60);
+    if (!slots.includes(requested.format('HH:mm'))) {
+      return res.status(409).json({ error: 'That time is no longer available. Please pick another.' });
     }
 
     // Generate cancellation token for this appointment

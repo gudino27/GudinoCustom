@@ -36,6 +36,8 @@ const testimonialsRoutes = require("./routes/testimonials");
 const adminTestimonialsRoutes = require("./routes/admin/testimonials");
 const pushTokensRoutes = require("./routes/push-tokens");
 const timeclockRoutes = require("./routes/timeclock");
+const notificationsRoutes = require("./routes/notifications");
+const { uploadHeaders } = require("./utils/safe-upload");
 const adminRoutes = require("./routes/admin");
 const miscRoutes = require("./routes/misc");
 const instagramRoutes = require("./routes/instagram");
@@ -143,10 +145,10 @@ app.use("/photos", (req, res, next) => {
 });
 
 // Serve static files from uploads directory
-app.use("/photos", express.static(path.join(__dirname, "uploads")));
-app.use("/testimonial-photos", express.static(path.join(__dirname, "uploads", "testimonial-photos")));
+app.use("/photos", express.static(path.join(__dirname, "uploads"), { setHeaders: uploadHeaders }));
+app.use("/testimonial-photos", express.static(path.join(__dirname, "uploads", "testimonial-photos"), { setHeaders: uploadHeaders }));
 // Serve showroom uploads (panoramas, textures, materials)
-app.use("/uploads/showroom", express.static(path.join(__dirname, "uploads", "showroom")));
+app.use("/uploads/showroom", express.static(path.join(__dirname, "uploads", "showroom"), { setHeaders: uploadHeaders }));
 // Serve 3DVista demo panoramas for testing virtual showroom
 app.use("/demo-panoramas", express.static(path.join(__dirname, "..", "3dvistademo")));
 
@@ -162,6 +164,7 @@ app.use("/api/admin/invoices", adminInvoicesRoutes);
 app.use("/api/testimonials", testimonialsRoutes);
 app.use("/api/admin/push-tokens", pushTokensRoutes);
 app.use("/api/timeclock", timeclockRoutes);
+app.use("/api/notifications", notificationsRoutes);
 app.use("/api/admin", adminTestimonialsRoutes);
 app.use("/api/instagram", instagramRoutes);
 app.use("/api", timelinesRoutes);
@@ -179,6 +182,14 @@ app.use((err, req, res, next) => {
   console.error("Design link request error:", err && (err.type || err.code || err.name));
   res.set("Cache-Control", "no-store");
   return res.status(400).json({ error: "bad_upload" });
+});
+
+// Anything no route handled: never send a stack trace, path or SQL to the client
+app.use((err, req, res, next) => {
+  if (res.headersSent) return next(err);
+  console.error("Unhandled request error:", err);
+  const status = err.status >= 400 && err.status < 500 ? err.status : 500;
+  return res.status(status).json({ error: status === 500 ? "Something went wrong" : "Bad request" });
 });
 
 // Initialize database and start server

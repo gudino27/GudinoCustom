@@ -5,13 +5,14 @@ import { calculateCurrentPayPeriodAmount } from '../utils/payrollCalculations';
 const PayrollInfoDisplay = ({
   payrollInfo,
   payPeriodHours,
+  payPeriodOvertime,
   employeeTaxRate,
   onOpenCalculator,
   t,
 }) => {
   if (!payrollInfo) return null;
 
-  const grossPay = calculateCurrentPayPeriodAmount(payrollInfo, payPeriodHours);
+  const grossPay = calculateCurrentPayPeriodAmount(payrollInfo, payPeriodHours, payPeriodOvertime);
   const netPay = grossPay * (1 - employeeTaxRate / 100);
 
   return (

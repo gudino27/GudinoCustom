@@ -230,7 +230,7 @@ struct EmployeeEditEntryModal: View {
             dismiss()
         } catch {
             print("❌ Failed to edit entry: \(error)")
-            viewModel.errorMessage = "Failed to update entry. Please try again."
+            viewModel.errorMessage = error.localizedDescription
         }
     }
 

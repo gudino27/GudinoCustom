@@ -1,6 +1,7 @@
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const { open } = require('sqlite');
+const { notifyRoles } = require('./utils/notifications');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 
@@ -759,6 +760,12 @@ const userDb = {
               userAgent
             ]
           );
+
+          await notifyRoles(db, ['super_admin'], {
+            type: 'security',
+            title: `${user.full_name || user.username} was locked out`,
+            body: `Account locked after ${failedAttempts} failed login attempts`,
+          });
 
           await db.close();
           return {

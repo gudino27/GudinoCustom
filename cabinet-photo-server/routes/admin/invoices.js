@@ -1,6 +1,8 @@
 const express = require("express");
 const router = express.Router();
 const { authenticateUser, requireRole } = require("../../middleware/auth");
+
+const adminOnly = requireRole(["admin", "super_admin"]);
 const { sanitizeQueryString } = require("../../middleware/validation");
 const { getDb, queueDbOperation, invoiceDb } = require("../../db-helpers");
 const {
@@ -13,7 +15,7 @@ const { generateReceiptPdf } = require("../../utils/receipt-generator");
 const { twilioClient } = require("../../utils/sms");
 const { getLocationFromIP } = require("../../utils/geolocation");
 // Admin endpoint - Get all invoices
-router.get("/", authenticateUser, async (req, res) => {
+router.get("/", authenticateUser, adminOnly, async (req, res) => {
   try {
     const invoices = await invoiceDb.getAllInvoices();
     res.json(invoices);
@@ -23,7 +25,7 @@ router.get("/", authenticateUser, async (req, res) => {
   }
 });
 // Admin endpoint - Get invoice tracking data
-router.get("/tracking", authenticateUser, async (req, res) => {
+router.get("/tracking", authenticateUser, adminOnly, async (req, res) => {
   try {
     const db = await getDb();
     // Get invoice tracking data with view counts, last viewed times, and location data
@@ -74,7 +76,7 @@ router.get("/tracking", authenticateUser, async (req, res) => {
   }
 });
 // Admin endpoint - Get invoice view statistics
-router.get("/view-stats", authenticateUser, async (req, res) => {
+router.get("/view-stats", authenticateUser, adminOnly, async (req, res) => {
   try {
     const stats = await invoiceDb.getAllInvoiceViewStats();
     res.json(stats);
@@ -84,7 +86,7 @@ router.get("/view-stats", authenticateUser, async (req, res) => {
   }
 });
 // Admin endpoint - Get invoices needing reminders
-router.get("/needing-reminders", authenticateUser, async (req, res) => {
+router.get("/needing-reminders", authenticateUser, adminOnly, async (req, res) => {
   try {
     const invoices = await invoiceDb.getInvoicesNeedingReminders();
     res.json(invoices);
@@ -95,7 +97,7 @@ router.get("/needing-reminders", authenticateUser, async (req, res) => {
 });
 // Admin endpoint - Get invoice by ID
 // Use next() for non-numeric IDs so named routes (clients, tax-rates, etc.) can match
-router.get("/:id", authenticateUser, async (req, res, next) => {
+router.get("/:id", authenticateUser, adminOnly, async (req, res, next) => {
   if (isNaN(req.params.id)) {
     return next();
   }
@@ -111,7 +113,7 @@ router.get("/:id", authenticateUser, async (req, res, next) => {
   }
 });
 // Admin endpoint - Create new invoice
-router.post("/", authenticateUser, async (req, res) => {
+router.post("/", authenticateUser, adminOnly, async (req, res) => {
   try {
     const result = await invoiceDb.createInvoice(req.body);
     res.json(result);
@@ -121,7 +123,7 @@ router.post("/", authenticateUser, async (req, res) => {
   }
 });
 // Admin endpoint - Update invoice
-router.put("/:id", authenticateUser, async (req, res) => {
+router.put("/:id", authenticateUser, adminOnly, async (req, res) => {
   try {
     const invoiceId = req.params.id;
     const updateData = req.body;
@@ -139,7 +141,7 @@ router.put("/:id", authenticateUser, async (req, res) => {
   }
 });
 // Admin endpoint - Get all clients
-router.get("/clients", authenticateUser, async (req, res) => {
+router.get("/clients", authenticateUser, adminOnly, async (req, res) => {
   try {
     const clients = await invoiceDb.getAllClients();
     res.json(clients);
@@ -149,7 +151,7 @@ router.get("/clients", authenticateUser, async (req, res) => {
   }
 });
 // Admin endpoint - Search clients with debouncing support
-router.get("/clients/search", authenticateUser, async (req, res) => {
+router.get("/clients/search", authenticateUser, adminOnly, async (req, res) => {
   try {
     // Security: Sanitize query parameter to prevent type confusion attacks
     // Rejects arrays/objects that could bypass length validation
@@ -165,7 +167,7 @@ router.get("/clients/search", authenticateUser, async (req, res) => {
   }
 });
 // Admin endpoint - Create new client
-router.post("/clients", authenticateUser, async (req, res) => {
+router.post("/clients", authenticateUser, adminOnly, async (req, res) => {
   try {
     const result = await invoiceDb.createClient(req.body);
     res.json(result);
@@ -175,7 +177,7 @@ router.post("/clients", authenticateUser, async (req, res) => {
   }
 });
 // Admin endpoint - Get single client by ID
-router.get("/clients/:id", authenticateUser, async (req, res) => {
+router.get("/clients/:id", authenticateUser, adminOnly, async (req, res) => {
   try {
     const client = await invoiceDb.getClientById(req.params.id);
     if (!client) {
@@ -188,7 +190,7 @@ router.get("/clients/:id", authenticateUser, async (req, res) => {
   }
 });
 // Admin endpoint - Update client
-router.put("/clients/:id", authenticateUser, async (req, res) => {
+router.put("/clients/:id", authenticateUser, adminOnly, async (req, res) => {
   try {
     await invoiceDb.updateClient(req.params.id, req.body);
     res.json({ success: true });
@@ -198,7 +200,7 @@ router.put("/clients/:id", authenticateUser, async (req, res) => {
   }
 });
 // Admin endpoint - Delete client
-router.delete("/clients/:id", authenticateUser, async (req, res) => {
+router.delete("/clients/:id", authenticateUser, adminOnly, async (req, res) => {
   try {
     const result = await invoiceDb.deleteClient(req.params.id);
     res.json({ success: true, changes: result.changes });
@@ -208,7 +210,7 @@ router.delete("/clients/:id", authenticateUser, async (req, res) => {
   }
 });
 // Admin endpoint - Get line item labels
-router.get("/line-item-labels", authenticateUser, async (req, res) => {
+router.get("/line-item-labels", authenticateUser, adminOnly, async (req, res) => {
   try {
     const labels = await invoiceDb.getLineItemLabels();
     res.json(labels);
@@ -218,7 +220,7 @@ router.get("/line-item-labels", authenticateUser, async (req, res) => {
   }
 });
 // Admin endpoint - Create line item label
-router.post("/line-item-labels", authenticateUser, async (req, res) => {
+router.post("/line-item-labels", authenticateUser, adminOnly, async (req, res) => {
   try {
     const result = await invoiceDb.createLineItemLabel(req.body);
     res.json(result);
@@ -228,7 +230,7 @@ router.post("/line-item-labels", authenticateUser, async (req, res) => {
   }
 });
 // Admin endpoint - Update line item label
-router.put("/line-item-labels/:id", authenticateUser, async (req, res) => {
+router.put("/line-item-labels/:id", authenticateUser, adminOnly, async (req, res) => {
   try {
     await invoiceDb.updateLineItemLabel(req.params.id, req.body);
     res.json({ success: true });
@@ -238,7 +240,7 @@ router.put("/line-item-labels/:id", authenticateUser, async (req, res) => {
   }
 });
 // Admin endpoint - Delete line item label
-router.delete("/line-item-labels/:id", authenticateUser, async (req, res) => {
+router.delete("/line-item-labels/:id", authenticateUser, adminOnly, async (req, res) => {
   try {
     await invoiceDb.deleteLineItemLabel(req.params.id);
     res.json({ success: true });
@@ -248,7 +250,7 @@ router.delete("/line-item-labels/:id", authenticateUser, async (req, res) => {
   }
 });
 // Admin endpoint - Fix tax rate precision manually
-router.post("/fix-tax-precision", authenticateUser, async (req, res) => {
+router.post("/fix-tax-precision", authenticateUser, adminOnly, async (req, res) => {
   try {
     if (req.user.role !== "super_admin") {
       return res.status(403).json({ error: "Super admin access required" });
@@ -264,7 +266,7 @@ router.post("/fix-tax-precision", authenticateUser, async (req, res) => {
   }
 });
 // Admin endpoint - Add payment to invoice
-router.post("/:id/payments", authenticateUser, async (req, res) => {
+router.post("/:id/payments", authenticateUser, adminOnly, async (req, res) => {
   try {
     const paymentData = {
       ...req.body,
@@ -279,7 +281,7 @@ router.post("/:id/payments", authenticateUser, async (req, res) => {
   }
 });
 // Admin endpoint - Get payments for an invoice
-router.get("/:id/payments", authenticateUser, async (req, res) => {
+router.get("/:id/payments", authenticateUser, adminOnly, async (req, res) => {
   try {
     const payments = await invoiceDb.getInvoicePayments(req.params.id);
     res.json(payments);
@@ -289,7 +291,7 @@ router.get("/:id/payments", authenticateUser, async (req, res) => {
   }
 });
 // Admin endpoint - Get all payments (for payment management)
-router.get("/payments", authenticateUser, async (req, res) => {
+router.get("/payments", authenticateUser, adminOnly, async (req, res) => {
   try {
     const payments = await invoiceDb.getAllPayments();
     res.json(payments);
@@ -299,7 +301,7 @@ router.get("/payments", authenticateUser, async (req, res) => {
   }
 });
 // Admin endpoint - Recalculate all invoice balances (for fixing balance issues)
-router.post("/recalculate-balances", authenticateUser, async (req, res) => {
+router.post("/recalculate-balances", authenticateUser, adminOnly, async (req, res) => {
   try {
     const { getDb } = require("./db-helpers");
     const db = await getDb();
@@ -333,7 +335,7 @@ router.post("/recalculate-balances", authenticateUser, async (req, res) => {
   }
 });
 // Admin endpoint - Update payment
-router.put("/payments/:id", authenticateUser, async (req, res) => {
+router.put("/payments/:id", authenticateUser, adminOnly, async (req, res) => {
   try {
     const result = await invoiceDb.updatePayment(req.params.id, req.body);
     res.json(result);
@@ -343,7 +345,7 @@ router.put("/payments/:id", authenticateUser, async (req, res) => {
   }
 });
 // Admin endpoint - Delete payment
-router.delete("/payments/:id", authenticateUser, async (req, res) => {
+router.delete("/payments/:id", authenticateUser, adminOnly, async (req, res) => {
   try {
     const result = await invoiceDb.deletePayment(req.params.id);
     res.json(result);
@@ -352,7 +354,7 @@ router.delete("/payments/:id", authenticateUser, async (req, res) => {
     res.status(500).json({ error: "Failed to delete payment" });
   }
 });
-router.post("/:id/send-email", authenticateUser, async (req, res) => {
+router.post("/:id/send-email", authenticateUser, adminOnly, async (req, res) => {
   try {
     const invoiceId = req.params.id;
     const {
@@ -478,7 +480,7 @@ router.post("/:id/send-email", authenticateUser, async (req, res) => {
   }
 });
 // Admin endpoint - Send invoice via SMS
-router.post("/:id/send-sms", authenticateUser, async (req, res) => {
+router.post("/:id/send-sms", authenticateUser, adminOnly, async (req, res) => {
   try {
     if (!twilioClient) {
       return res.status(500).json({ error: "SMS service not configured" });
@@ -567,7 +569,7 @@ router.post("/:id/send-sms", authenticateUser, async (req, res) => {
   }
 });
 // Admin endpoint - Update invoice number
-router.put("/:id/invoice-number", authenticateUser, async (req, res) => {
+router.put("/:id/invoice-number", authenticateUser, adminOnly, async (req, res) => {
   try {
     const invoiceId = req.params.id;
     const { invoice_number } = req.body;
@@ -608,7 +610,7 @@ router.put("/:id/invoice-number", authenticateUser, async (req, res) => {
   }
 });
 // Admin endpoint - Delete invoice completely
-router.delete("/:id", authenticateUser, async (req, res) => {
+router.delete("/:id", authenticateUser, adminOnly, async (req, res) => {
   try {
     const invoiceId = req.params.id;
 
@@ -641,7 +643,7 @@ router.delete("/:id", authenticateUser, async (req, res) => {
 });
 
 // Superadmin endpoint - Delete ALL invoices (requires special confirmation)
-router.delete("/delete-all", authenticateUser, async (req, res) => {
+router.delete("/delete-all", authenticateUser, adminOnly, async (req, res) => {
   try {
     // Check if user is superadmin (you may need to add this field to users table)
     if (req.user.role !== "superadmin") {
@@ -689,7 +691,7 @@ router.delete("/delete-all", authenticateUser, async (req, res) => {
   }
 });
 // Admin endpoint - Create tax rate
-router.post("/tax-rates", authenticateUser, async (req, res) => {
+router.post("/tax-rates", authenticateUser, adminOnly, async (req, res) => {
   try {
     const { state_code, city, tax_rate, description } = req.body;
 
@@ -735,7 +737,7 @@ router.post("/tax-rates", authenticateUser, async (req, res) => {
   }
 });
 // Admin endpoint - Update tax rate
-router.put("/tax-rates/:id", authenticateUser, async (req, res) => {
+router.put("/tax-rates/:id", authenticateUser, adminOnly, async (req, res) => {
   try {
     const taxRateId = req.params.id;
     const { state_code, county, city, tax_rate, description, is_active } =
@@ -799,7 +801,7 @@ router.put("/tax-rates/:id", authenticateUser, async (req, res) => {
   }
 });
 // Admin endpoint - Delete tax rate
-router.delete("/tax-rates/:id", authenticateUser, async (req, res) => {
+router.delete("/tax-rates/:id", authenticateUser, adminOnly, async (req, res) => {
   try {
     const taxRateId = req.params.id;
 
@@ -830,7 +832,7 @@ router.delete("/tax-rates/:id", authenticateUser, async (req, res) => {
   }
 });
 // Admin endpoint - Bulk delete tax rates
-router.post("/tax-rates/bulk-delete", authenticateUser, async (req, res) => {
+router.post("/tax-rates/bulk-delete", authenticateUser, adminOnly, async (req, res) => {
   try {
     const { ids } = req.body;
 
@@ -888,7 +890,7 @@ router.post("/tax-rates/bulk-delete", authenticateUser, async (req, res) => {
   }
 });
 // Admin endpoint - Bulk add tax rates
-router.post("/tax-rates/bulk-add", authenticateUser, async (req, res) => {
+router.post("/tax-rates/bulk-add", authenticateUser, adminOnly, async (req, res) => {
   try {
     const { taxRates } = req.body;
 
@@ -965,7 +967,7 @@ router.post("/tax-rates/bulk-add", authenticateUser, async (req, res) => {
   }
 });
 // Admin endpoint - Generate invoice PDF
-router.get("/:id/pdf", authenticateUser, async (req, res) => {
+router.get("/:id/pdf", authenticateUser, adminOnly, async (req, res) => {
   try {
     const invoiceId = req.params.id;
     const language = req.query.lang || "en";
@@ -996,7 +998,7 @@ router.get("/:id/pdf", authenticateUser, async (req, res) => {
   }
 });
 // Admin endpoint - Generate receipt PDF for a payment
-router.get("/:invoiceId/payments/:paymentId/receipt/pdf", authenticateUser, async (req, res) => {
+router.get("/:invoiceId/payments/:paymentId/receipt/pdf", authenticateUser, adminOnly, async (req, res) => {
   try {
     const { paymentId } = req.params;
     const language = req.query.lang || "en";
@@ -1029,7 +1031,7 @@ router.get("/:invoiceId/payments/:paymentId/receipt/pdf", authenticateUser, asyn
   }
 });
 // Admin endpoint - Send receipt via email/SMS
-router.post("/:invoiceId/payments/:paymentId/receipt/send", authenticateUser, async (req, res) => {
+router.post("/:invoiceId/payments/:paymentId/receipt/send", authenticateUser, adminOnly, async (req, res) => {
   try {
     const { paymentId } = req.params;
     const { recipients, language = "en", send_via = "email" } = req.body;
@@ -1150,7 +1152,7 @@ router.post("/:invoiceId/payments/:paymentId/receipt/send", authenticateUser, as
   }
 });
 // Admin endpoint - Get tax rates
-router.get("/tax-rates", authenticateUser, async (req, res) => {
+router.get("/tax-rates", authenticateUser, adminOnly, async (req, res) => {
   try {
     const rates = await invoiceDb.getTaxRates();
     res.json(rates);
@@ -1160,7 +1162,7 @@ router.get("/tax-rates", authenticateUser, async (req, res) => {
   }
 });
 // Admin endpoint - Update tax rate
-router.put("/tax-rates/:id", authenticateUser, async (req, res) => {
+router.put("/tax-rates/:id", authenticateUser, adminOnly, async (req, res) => {
   try {
     const taxData = { ...req.body, updated_by: req.user.id };
     await invoiceDb.updateTaxRate(req.params.id, taxData);
@@ -1171,7 +1173,7 @@ router.put("/tax-rates/:id", authenticateUser, async (req, res) => {
   }
 });
 // Admin endpoint - Get reminder settings for an invoice
-router.get("/:id/reminder-settings", authenticateUser, async (req, res) => {
+router.get("/:id/reminder-settings", authenticateUser, adminOnly, async (req, res) => {
   try {
     const settings = await invoiceDb.getReminderSettings(req.params.id);
     res.json(
@@ -1183,7 +1185,7 @@ router.get("/:id/reminder-settings", authenticateUser, async (req, res) => {
   }
 });
 // Admin endpoint - Update reminder settings for an invoice
-router.put("/:id/reminder-settings", authenticateUser, async (req, res) => {
+router.put("/:id/reminder-settings", authenticateUser, adminOnly, async (req, res) => {
   try {
     const { reminders_enabled, reminder_days } = req.body;
     await invoiceDb.updateReminderSettings(req.params.id, {
@@ -1197,7 +1199,7 @@ router.put("/:id/reminder-settings", authenticateUser, async (req, res) => {
   }
 });
 // Admin endpoint - Send manual reminder for an invoice
-router.post("/:id/send-reminder", authenticateUser, async (req, res) => {
+router.post("/:id/send-reminder", authenticateUser, adminOnly, async (req, res) => {
   try {
     const invoiceId = req.params.id;
     const { reminder_type = "both", custom_message } = req.body;
@@ -1370,7 +1372,7 @@ router.post("/:id/send-reminder", authenticateUser, async (req, res) => {
   }
 });
 // Admin endpoint - Get reminder history for an invoice
-router.get("/:id/reminder-history", authenticateUser, async (req, res) => {
+router.get("/:id/reminder-history", authenticateUser, adminOnly, async (req, res) => {
   try {
     const history = await invoiceDb.getReminderHistory(req.params.id);
     res.json(history);

@@ -140,9 +140,10 @@ struct PayPeriod: Codable {
     let periodType: String?
     let hours: Double
     let earnings: Double?
+    var overtimeHours: Double? = nil
 
     enum CodingKeys: String, CodingKey {
-        case id, startDate, endDate, payDate, periodType, hours, earnings
+        case id, startDate, endDate, payDate, periodType, hours, earnings, overtimeHours
     }
 }
 

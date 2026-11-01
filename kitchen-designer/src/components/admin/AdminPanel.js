@@ -28,7 +28,8 @@ import {
   Settings,
   Menu,
   X,
-  Eye
+  Eye,
+  Bell
 } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
 // -------------------------------------------------
@@ -49,6 +50,7 @@ import InvoiceManager from './InvoiceManager';
 import SmsRoutingManager from './SmsRoutingManager';
 import SecurityMonitor from './SecurityMonitor';
 import TimeClockManager from './TimeClockManager';
+import NotificationsPanel from './NotificationsPanel';
 import InstagramManager from './InstagramManager';
 import ProjectTimelineManager from './ProjectTimelineManager';
 import ScheduleManager from './ScheduleManager';
@@ -79,6 +81,7 @@ const AdminPanel = () => {
   const [loginCredentials, setLoginCredentials] = useState({ username: '', password: '' });
   const [loginError, setLoginError] = useState('');
   const [activeTab, setActiveTab] = useState('prices');
+  const [unreadCount, setUnreadCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
@@ -276,12 +279,43 @@ const AdminPanel = () => {
     }
   };
 
+  // Keep the unread count on the tab current, wherever the user is
+  useEffect(() => {
+    if (!token) return undefined;
+
+    const fetchUnread = async () => {
+      try {
+        const response = await fetch(`${API_BASE}/api/notifications`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const data = await response.json();
+        if (data.success) setUnreadCount(data.unreadCount);
+      } catch (error) {
+        console.error('Error fetching notifications:', error);
+      }
+    };
+
+    fetchUnread();
+    const interval = setInterval(fetchUnread, 60000);
+    return () => clearInterval(interval);
+  }, [token]);
+
   // Navigation structure with grouped tabs
   const getNavigationGroups = () => {
+    const notificationsTab = {
+      type: 'single',
+      id: 'notifications',
+      icon: Bell,
+      label: unreadCount > 0
+        ? `${t('admin.tabs.notifications')} (${unreadCount})`
+        : t('admin.tabs.notifications')
+    };
+
     // Employees only get access to time clock
     if (user?.role === 'employee') {
       return [
-        { type: 'single', id: 'timeclock', icon: Clock, label: t('admin.tabs.timeclock') }
+        { type: 'single', id: 'timeclock', icon: Clock, label: t('admin.tabs.timeclock') },
+        notificationsTab
       ];
     }
 
@@ -291,6 +325,7 @@ const AdminPanel = () => {
       { type: 'single', id: 'photos', icon: Image, label: t('admin.tabs.photos') },
       { type: 'single', id: 'employees', icon: IdCardLanyard, label: t('admin.tabs.employees') },
       { type: 'single', id: 'timeclock', icon: Clock, label: t('admin.tabs.timeclock') },
+      notificationsTab,
       { type: 'single', id: 'designs', icon: FileText, label: t('admin.tabs.designs') },
       { type: 'single', id: 'invoices', icon: Receipt, label: t('admin.tabs.invoices') },
       {
@@ -778,6 +813,9 @@ const AdminPanel = () => {
          This component will handle employee time tracking
         */}
         {activeTab === 'timeclock' && (<TimeClockManager token={token} API_BASE={API_BASE} user={user} />)}
+        {activeTab === 'notifications' && (
+          <NotificationsPanel token={token} API_BASE={API_BASE} onUnreadChange={setUnreadCount} t={t} />
+        )}
         {/*
          Design Viewer Tab
         */}

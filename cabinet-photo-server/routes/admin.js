@@ -4,6 +4,8 @@ const express = require("express");
 const router = express.Router();
 const {getDb,userDb, invoiceDb} = require("../db-helpers");
 const { authenticateUser, requireRole } = require("../middleware/auth");
+
+const adminOnly = requireRole(["admin", "super_admin"]);
 const { sanitizeQueryString } = require("../middleware/validation");
 const { 
   twilioClient,
@@ -746,7 +748,7 @@ router.post("/api/admin/test-sms",authenticateUser,requireRole(["super_admin"]),
   }
 );
 // Client Management Endpoints
-router.get("/api/admin/clients", authenticateUser, async (req, res) => {
+router.get("/api/admin/clients", authenticateUser, adminOnly, async (req, res) => {
   try {
     const clients = await invoiceDb.getAllClients();
     res.json(clients);
@@ -756,7 +758,7 @@ router.get("/api/admin/clients", authenticateUser, async (req, res) => {
   }
 });
 
-router.get("/api/admin/clients/search", authenticateUser, async (req, res) => {
+router.get("/api/admin/clients/search", authenticateUser, adminOnly, async (req, res) => {
   try {
     // Security: Sanitize query parameter to prevent type confusion attacks
     // Rejects arrays/objects that could bypass length validation
@@ -772,7 +774,7 @@ router.get("/api/admin/clients/search", authenticateUser, async (req, res) => {
   }
 });
 
-router.post("/api/admin/clients", authenticateUser, async (req, res) => {
+router.post("/api/admin/clients", authenticateUser, adminOnly, async (req, res) => {
   try {
     const result = await invoiceDb.createClient(req.body);
     res.json(result);
@@ -782,7 +784,7 @@ router.post("/api/admin/clients", authenticateUser, async (req, res) => {
   }
 });
 
-router.get("/api/admin/clients/:id", authenticateUser, async (req, res) => {
+router.get("/api/admin/clients/:id", authenticateUser, adminOnly, async (req, res) => {
   try {
     const client = await invoiceDb.getClientById(req.params.id);
     if (!client) {
@@ -795,7 +797,7 @@ router.get("/api/admin/clients/:id", authenticateUser, async (req, res) => {
   }
 });
 
-router.put("/api/admin/clients/:id", authenticateUser, async (req, res) => {
+router.put("/api/admin/clients/:id", authenticateUser, adminOnly, async (req, res) => {
   try {
     await invoiceDb.updateClient(req.params.id, req.body);
     res.json({ success: true });
@@ -805,7 +807,7 @@ router.put("/api/admin/clients/:id", authenticateUser, async (req, res) => {
   }
 });
 
-router.delete("/api/admin/clients/:id", authenticateUser, async (req, res) => {
+router.delete("/api/admin/clients/:id", authenticateUser, adminOnly, async (req, res) => {
   try {
     const result = await invoiceDb.deleteClient(req.params.id);
     res.json({ success: true, changes: result.changes });
@@ -816,7 +818,7 @@ router.delete("/api/admin/clients/:id", authenticateUser, async (req, res) => {
 });
 
 // Line Item Labels Endpoints
-router.get("/api/admin/line-item-labels", authenticateUser, async (req, res) => {
+router.get("/api/admin/line-item-labels", authenticateUser, adminOnly, async (req, res) => {
   try {
     const labels = await invoiceDb.getLineItemLabels();
     res.json(labels);
@@ -826,7 +828,7 @@ router.get("/api/admin/line-item-labels", authenticateUser, async (req, res) => 
   }
 });
 
-router.post("/api/admin/line-item-labels", authenticateUser, async (req, res) => {
+router.post("/api/admin/line-item-labels", authenticateUser, adminOnly, async (req, res) => {
   try {
     const result = await invoiceDb.createLineItemLabel(req.body);
     res.json(result);
@@ -836,7 +838,7 @@ router.post("/api/admin/line-item-labels", authenticateUser, async (req, res) =>
   }
 });
 
-router.put("/api/admin/line-item-labels/:id", authenticateUser, async (req, res) => {
+router.put("/api/admin/line-item-labels/:id", authenticateUser, adminOnly, async (req, res) => {
   try {
     await invoiceDb.updateLineItemLabel(req.params.id, req.body);
     res.json({ success: true });
@@ -846,7 +848,7 @@ router.put("/api/admin/line-item-labels/:id", authenticateUser, async (req, res)
   }
 });
 
-router.delete("/api/admin/line-item-labels/:id", authenticateUser, async (req, res) => {
+router.delete("/api/admin/line-item-labels/:id", authenticateUser, adminOnly, async (req, res) => {
   try {
     await invoiceDb.deleteLineItemLabel(req.params.id);
     res.json({ success: true });
@@ -857,7 +859,7 @@ router.delete("/api/admin/line-item-labels/:id", authenticateUser, async (req, r
 });
 
 // Tax Rates Endpoints
-router.get("/api/admin/tax-rates", authenticateUser, async (req, res) => {
+router.get("/api/admin/tax-rates", authenticateUser, adminOnly, async (req, res) => {
   try {
     const rates = await invoiceDb.getTaxRates();
     res.json(rates);
@@ -867,7 +869,7 @@ router.get("/api/admin/tax-rates", authenticateUser, async (req, res) => {
   }
 });
 
-router.post("/api/admin/tax-rates", authenticateUser, async (req, res) => {
+router.post("/api/admin/tax-rates", authenticateUser, adminOnly, async (req, res) => {
   try {
     const taxData = { ...req.body, created_by: req.user.id };
     const result = await invoiceDb.createTaxRate(taxData);
@@ -878,7 +880,7 @@ router.post("/api/admin/tax-rates", authenticateUser, async (req, res) => {
   }
 });
 
-router.put("/api/admin/tax-rates/:id", authenticateUser, async (req, res) => {
+router.put("/api/admin/tax-rates/:id", authenticateUser, adminOnly, async (req, res) => {
   try {
     const taxData = { ...req.body, updated_by: req.user.id };
     await invoiceDb.updateTaxRate(req.params.id, taxData);
@@ -889,7 +891,7 @@ router.put("/api/admin/tax-rates/:id", authenticateUser, async (req, res) => {
   }
 });
 
-router.delete("/api/admin/tax-rates/:id", authenticateUser, async (req, res) => {
+router.delete("/api/admin/tax-rates/:id", authenticateUser, adminOnly, async (req, res) => {
   try {
     await invoiceDb.deleteTaxRate(req.params.id);
     res.json({ success: true });
@@ -901,7 +903,7 @@ router.delete("/api/admin/tax-rates/:id", authenticateUser, async (req, res) => 
 
 // Design Notification Settings Endpoints
 // Admin endpoint - Get design notification settings (super_admin only)
-router.get("/api/admin/design-notification-settings",authenticateUser,async (req, res) => {
+router.get("/api/admin/design-notification-settings",authenticateUser, adminOnly,async (req, res) => {
     try {
       if (req.user.role !== "super_admin") {
         return res.status(403).json({ error: "Super admin access required" });
@@ -918,7 +920,7 @@ router.get("/api/admin/design-notification-settings",authenticateUser,async (req
   }
 );
 // Admin endpoint - Update design notification settings (super_admin only)
-router.put("/api/admin/design-notification-settings",authenticateUser,async (req, res) => {
+router.put("/api/admin/design-notification-settings",authenticateUser, adminOnly,async (req, res) => {
     try {
       if (req.user.role !== "super_admin") {
         return res.status(403).json({ error: "Super admin access required" });

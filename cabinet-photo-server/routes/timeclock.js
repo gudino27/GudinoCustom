@@ -3,6 +3,9 @@ const router = express.Router();
 const { authenticateUser, isSuperAdmin, isAdminOrSuperAdmin } = require("../middleware/auth");
 const { getDb } = require("../db-helpers");
 const moment = require("moment-timezone");
+const { recalcWeek } = require("../utils/weekly-overtime");
+const { notifyUser, notifyRoles } = require("../utils/notifications");
+const { reportBlockedAttempt } = require("../utils/security-alerts");
 
 // Timezone constant
 const TIMEZONE = "America/Los_Angeles"; // PST/PDT
@@ -25,11 +28,129 @@ function calculateHours(clockIn, clockOut, breakMinutes = 0) {
   return totalMinutes / 60;
 }
 
-// Helper function to calculate regular and overtime hours
-function calculateRegularAndOvertime(totalHours) {
-  const regularHours = Math.min(totalHours, 8);
-  const overtimeHours = Math.max(totalHours - 8, 0);
-  return { regularHours, overtimeHours };
+// Stored times are Pacific wall-clock strings, always in this format
+const ENTRY_TIME_FORMAT = "YYYY-MM-DD HH:mm:ss";
+const ENTRY_INPUT_FORMATS = [
+  ENTRY_TIME_FORMAT,
+  "YYYY-MM-DD HH:mm",
+  "YYYY-MM-DDTHH:mm:ss",
+  "YYYY-MM-DDTHH:mm",
+];
+
+function isAdminUser(user) {
+  return user.role === "admin" || user.role === "super_admin";
+}
+
+function canManageEntry(user, entry) {
+  return isAdminUser(user) || Number(entry.employee_id) === Number(user.id);
+}
+
+// Validates entered times; returns { error } or the cleaned-up values
+function checkEntryTimes(clockInTime, clockOutTime, breakMinutes) {
+  const clockIn = moment(clockInTime, ENTRY_INPUT_FORMATS, true);
+  if (!clockIn.isValid()) {
+    return { error: "Clock in time is not valid" };
+  }
+
+  const clockOut = clockOutTime ? moment(clockOutTime, ENTRY_INPUT_FORMATS, true) : null;
+  if (clockOut && !clockOut.isValid()) {
+    return { error: "Clock out time is not valid" };
+  }
+  // The forms pick one date, so an earlier clock out means it ran past midnight
+  if (clockOut && clockOut.isBefore(clockIn) && clockOut.isSame(clockIn, "day")) {
+    clockOut.add(1, "day");
+  }
+  if (clockOut && !clockOut.isAfter(clockIn)) {
+    return { error: "Clock out must be after clock in" };
+  }
+
+  const minutes = Number(breakMinutes || 0);
+  if (!Number.isInteger(minutes) || minutes < 0) {
+    return { error: "Break minutes must be a whole number" };
+  }
+  if (clockOut && minutes >= clockOut.diff(clockIn, "minutes")) {
+    return { error: "Break must be shorter than the shift" };
+  }
+
+  return {
+    clockIn: clockIn.format(ENTRY_TIME_FORMAT),
+    clockOut: clockOut ? clockOut.format(ENTRY_TIME_FORMAT) : null,
+    breakMinutes: minutes,
+  };
+}
+
+// Finds another entry for this employee that shares any time with the given shift
+async function findOverlap(db, employeeId, clockIn, clockOut, excludeId = 0) {
+  const now = moment().tz(TIMEZONE).format(ENTRY_TIME_FORMAT);
+  return db.get(
+    `SELECT clock_in_time, clock_out_time FROM time_clock_entries
+     WHERE employee_id = ? AND is_deleted = 0 AND id != ?
+     AND datetime(clock_in_time) < datetime(?)
+     AND datetime(COALESCE(clock_out_time, ?)) > datetime(?)
+     LIMIT 1`,
+    [employeeId, excludeId, clockOut || now, now, clockIn]
+  );
+}
+
+function overlapMessage(entry) {
+  const start = moment(entry.clock_in_time).format("MMM D, h:mm A");
+  const end = entry.clock_out_time
+    ? moment(entry.clock_out_time).format("h:mm A")
+    : "still clocked in";
+  return `This overlaps an existing entry (${start} - ${end})`;
+}
+
+// "Oct 30, 7:00 AM - 3:30 PM (30 min break)"
+function shiftText(clockIn, clockOut, breakMinutes) {
+  const start = moment(clockIn).format("MMM D, h:mm A");
+  const end = clockOut ? moment(clockOut).format("h:mm A") : "still clocked in";
+  return `${start} - ${end}${breakMinutes > 0 ? ` (${breakMinutes} min break)` : ""}`;
+}
+
+function managers(db, entry, title, body) {
+  return notifyRoles(db, ["admin", "super_admin"], {
+    type: "approval",
+    title: `${entry.employee_name} ${title}`,
+    body,
+    entryId: entry.id,
+  });
+}
+
+// The employee's own record of what a manager did to their time
+async function tellEmployee(db, req, entry, title, body) {
+  if (Number(entry.employee_id) === Number(req.user.id)) return;
+
+  await notifyUser(db, entry.employee_id, { type: "timeclock", title, body, entryId: entry.id });
+}
+
+async function managerName(db, user) {
+  const person = await db.get(`SELECT full_name, username FROM users WHERE id = ?`, [user.id]);
+  return person?.full_name || person?.username || "A manager";
+}
+
+// Runs entry changes one at a time, so two requests can't both pass the overlap check
+let entryQueue = Promise.resolve();
+
+function oneAtATime(operation) {
+  const run = entryQueue.then(operation, operation);
+  entryQueue = run.catch(() => {});
+  return run;
+}
+
+async function logEntryChange(db, entryId, user, type, reason, before = {}, after = {}) {
+  const person = await db.get(`SELECT full_name FROM users WHERE id = ?`, [user.id]);
+  await db.run(
+    `INSERT INTO time_entry_modifications (
+      time_entry_id, modified_by, modified_by_name, modification_type, reason,
+      old_clock_in, old_clock_out, old_total_hours,
+      new_clock_in, new_clock_out, new_total_hours
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      entryId, user.id, person?.full_name || "Unknown", type, reason,
+      before.clockIn, before.clockOut, before.totalHours,
+      after.clockIn, after.clockOut, after.totalHours,
+    ]
+  );
 }
 
 // ==================== EMPLOYEE ENDPOINTS ====================
@@ -115,16 +236,20 @@ router.post("/clock-out", authenticateUser, async (req, res) => {
         clockOutTime,
         activeEntry.break_minutes
       );
-      const { regularHours, overtimeHours } = calculateRegularAndOvertime(totalHours);
 
       // Update entry
       await db.run(
         `UPDATE time_clock_entries 
-         SET clock_out_time = ?, total_hours = ?, regular_hours = ?, 
-             overtime_hours = ?, status = 'completed', notes = ?,
+         SET clock_out_time = ?, total_hours = ?, status = 'completed', notes = ?,
              updated_at = CURRENT_TIMESTAMP
          WHERE id = ?`,
-        [clockOutTime, totalHours, regularHours, overtimeHours, notes, activeEntry.id]
+        [clockOutTime, totalHours, notes, activeEntry.id]
+      );
+
+      await recalcWeek(db, userId, activeEntry.clock_in_time);
+      const { regular_hours: regularHours, overtime_hours: overtimeHours } = await db.get(
+        `SELECT regular_hours, overtime_hours FROM time_clock_entries WHERE id = ?`,
+        [activeEntry.id]
       );
 
       res.json({
@@ -624,7 +749,9 @@ router.get("/admin/entries", authenticateUser, isAdminOrSuperAdmin, async (req, 
 });
 
 // POST /api/admin/timeclock/add-manual-entry - Create manual time entry
-router.post("/admin/add-manual-entry", authenticateUser, isAdminOrSuperAdmin, async (req, res) => {
+// Admins can add time for anyone. Employees add their own, which waits for approval
+// with no hours on it, so nothing counts toward pay until a manager approves it
+router.post("/admin/add-manual-entry", authenticateUser, async (req, res) => {
   try {
     const adminId = req.user.id;
     const {
@@ -639,53 +766,99 @@ router.post("/admin/add-manual-entry", authenticateUser, isAdminOrSuperAdmin, as
     } = req.body;
 
     // Validate required fields
-    if (!employeeId || !employeeName || !clockInTime || !clockOutTime || !reason) {
+    if (!clockInTime || !clockOutTime) {
       return res.status(400).json({
         success: false,
         message: "Missing required fields",
       });
     }
 
-    await withDb(async (db) => {
-      // Calculate hours
-      const totalHours = calculateHours(clockInTime, clockOutTime, breakMinutes || 0);
-      const { regularHours, overtimeHours } = calculateRegularAndOvertime(totalHours);
+    const times = checkEntryTimes(clockInTime, clockOutTime, breakMinutes);
+    if (times.error) {
+      return res.status(400).json({ success: false, message: times.error });
+    }
 
-      // Check for overnight shift
-      const isOvernight = moment(clockOutTime).isBefore(moment(clockInTime));
+    // The iOS employee screen sends employeeId 0 and no name, meaning "me"
+    const targetId = isAdminUser(req.user) && Number(employeeId) ? Number(employeeId) : req.user.id;
+
+    if (!isAdminUser(req.user) && Number(employeeId) && Number(employeeId) !== Number(req.user.id)) {
+      reportBlockedAttempt(req, "Tried to add time for another employee");
+      return res.status(403).json({
+        success: false,
+        message: "You can only add your own time",
+      });
+    }
+
+    await oneAtATime(() => withDb(async (db) => {
+      const employee = await db.get(`SELECT full_name FROM users WHERE id = ?`, [targetId]);
+      const targetName = employee?.full_name || employeeName;
+
+      if (!targetName) {
+        return res.status(400).json({
+          success: false,
+          message: "Employee not found",
+        });
+      }
+
+      const overlap = await findOverlap(db, targetId, times.clockIn, times.clockOut);
+      if (overlap) {
+        return res.status(400).json({ success: false, message: overlapMessage(overlap) });
+      }
+
+      // Calculate hours
+      const pendingApproval = !isAdminUser(req.user);
+      const totalHours = pendingApproval
+        ? null
+        : calculateHours(times.clockIn, times.clockOut, times.breakMinutes);
 
       // Insert manual entry
       const result = await db.run(
         `INSERT INTO time_clock_entries (
           employee_id, employee_name, clock_in_time, clock_out_time,
-          total_hours, regular_hours, overtime_hours, break_minutes,
+          total_hours, break_minutes,
           status, entry_method, manually_entered_by, manual_entry_reason,
           notes, location
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'completed', 'manual', ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, 'manual', ?, ?, ?, ?)`,
         [
-          employeeId,
-          employeeName,
-          clockInTime,
-          clockOutTime,
+          targetId,
+          targetName,
+          times.clockIn,
+          times.clockOut,
           totalHours,
-          regularHours,
-          overtimeHours,
-          breakMinutes || 0,
+          times.breakMinutes,
+          pendingApproval ? "pending" : "completed",
           adminId,
-          reason,
+          reason || (pendingApproval ? "Forgot to clock in/out" : "Added by a manager"),
           notes,
           location,
         ]
       );
 
+      const entry = { id: result.lastID, employee_id: targetId, employee_name: targetName };
+      const shift = shiftText(times.clockIn, times.clockOut, times.breakMinutes);
+
+      if (pendingApproval) {
+        await managers(db, entry, "added time", shift);
+      } else {
+        await recalcWeek(db, targetId, times.clockIn);
+        await logEntryChange(
+          db, entry.id, req.user, "manual_add", reason || "Added by a manager", {},
+          { clockIn: times.clockIn, clockOut: times.clockOut, totalHours }
+        );
+        await tellEmployee(
+          db, req, entry, `${await managerName(db, req.user)} added time for you`,
+          `${shift}${reason ? `. Reason: ${reason}` : ""}`
+        );
+      }
+
       res.json({
         success: true,
-        message: "Manual entry created",
+        message: pendingApproval ? "Sent for approval" : "Manual entry created",
         entryId: result.lastID,
-        totalHours: totalHours.toFixed(2),
-        isOvernight,
+        pendingApproval,
+        totalHours: pendingApproval ? null : totalHours.toFixed(2),
       });
-    });
+    }));
   } catch (error) {
     console.error("Add manual entry error:", error);
     res.status(500).json({
@@ -697,13 +870,19 @@ router.post("/admin/add-manual-entry", authenticateUser, isAdminOrSuperAdmin, as
 });
 
 // PUT /api/admin/timeclock/edit-entry/:id - Edit time entry
-router.put("/admin/edit-entry/:id", authenticateUser, isAdminOrSuperAdmin, async (req, res) => {
+// Admins can edit any entry. Employees can change their own, including approved
+// ones, but the entry stays as it is until a manager approves the change
+router.put("/admin/edit-entry/:id", authenticateUser, async (req, res) => {
   try {
     const entryId = req.params.id;
-    const adminId = req.user.id;
     const { clockInTime, clockOutTime, breakMinutes, reason, notes } = req.body;
 
-    await withDb(async (db) => {
+    const times = checkEntryTimes(clockInTime, clockOutTime, breakMinutes);
+    if (times.error) {
+      return res.status(400).json({ success: false, message: times.error });
+    }
+
+    await oneAtATime(() => withDb(async (db) => {
       // Get original entry
       const original = await db.get(
         `SELECT * FROM time_clock_entries WHERE id = ? AND is_deleted = 0`,
@@ -717,9 +896,56 @@ router.put("/admin/edit-entry/:id", authenticateUser, isAdminOrSuperAdmin, async
         });
       }
 
+      if (!canManageEntry(req.user, original)) {
+        reportBlockedAttempt(req, `Tried to change ${original.employee_name}'s time`);
+        return res.status(403).json({
+          success: false,
+          message: "You can only change your own time entries",
+        });
+      }
+
+      // Only a shift still in progress may be saved without a clock out
+      const stillClockedIn = original.status === "active" && !times.clockOut;
+      if (!times.clockOut && !stillClockedIn) {
+        return res.status(400).json({
+          success: false,
+          message: "Clock out time is required",
+        });
+      }
+
+      const overlap = await findOverlap(db, original.employee_id, times.clockIn, times.clockOut, original.id);
+      if (overlap) {
+        return res.status(400).json({ success: false, message: overlapMessage(overlap) });
+      }
+
+      if (!isAdminUser(req.user)) {
+        if (original.status === "pending") {
+          await db.run(
+            `UPDATE time_clock_entries
+             SET clock_in_time = ?, clock_out_time = ?, break_minutes = ?, notes = ?,
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE id = ?`,
+            [times.clockIn, times.clockOut, times.breakMinutes, notes, entryId]
+          );
+        } else {
+          await db.run(
+            `UPDATE time_clock_entries SET pending_changes = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+            [JSON.stringify({ action: "edit", ...times, notes }), entryId]
+          );
+          await logEntryChange(db, entryId, req.user, "edit_request", reason || "Time correction");
+          await managers(
+            db, original, "changed an entry",
+            `${shiftText(original.clock_in_time, original.clock_out_time, original.break_minutes)} to ${shiftText(times.clockIn, times.clockOut, times.breakMinutes)}`
+          );
+        }
+
+        return res.json({ success: true, message: "Sent for approval", pendingApproval: true });
+      }
+
       // Calculate new hours
-      const totalHours = calculateHours(clockInTime, clockOutTime, breakMinutes || 0);
-      const { regularHours, overtimeHours } = calculateRegularAndOvertime(totalHours);
+      const totalHours = stillClockedIn
+        ? null
+        : calculateHours(times.clockIn, times.clockOut, times.breakMinutes);
 
       // Store original values if first edit
       const originalClockIn = original.original_clock_in || original.clock_in_time;
@@ -729,59 +955,46 @@ router.put("/admin/edit-entry/:id", authenticateUser, isAdminOrSuperAdmin, async
       await db.run(
         `UPDATE time_clock_entries 
          SET clock_in_time = ?, clock_out_time = ?, total_hours = ?,
-             regular_hours = ?, overtime_hours = ?, break_minutes = ?,
+             regular_hours = NULL, overtime_hours = NULL, break_minutes = ?,
              original_clock_in = ?, original_clock_out = ?,
              modification_count = modification_count + 1,
-             status = 'edited', entry_method = 'edited', notes = ?,
+             status = ?, entry_method = 'edited', notes = ?, pending_changes = NULL,
              edited_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
          WHERE id = ?`,
         [
-          clockInTime,
-          clockOutTime,
+          times.clockIn,
+          times.clockOut,
           totalHours,
-          regularHours,
-          overtimeHours,
-          breakMinutes || 0,
+          times.breakMinutes,
           originalClockIn,
           originalClockOut,
+          stillClockedIn ? "active" : "edited",
           notes,
           entryId,
         ]
       );
 
-      // Get admin name
-      const admin = await db.get(
-        `SELECT full_name FROM users WHERE id = ?`,
-        [adminId]
-      );
+      await recalcWeek(db, original.employee_id, original.clock_in_time);
+      await recalcWeek(db, original.employee_id, times.clockIn);
 
       // Log modification
-      await db.run(
-        `INSERT INTO time_entry_modifications (
-          time_entry_id, modified_by, modified_by_name, modification_type, reason,
-          old_clock_in, old_clock_out, old_total_hours,
-          new_clock_in, new_clock_out, new_total_hours
-        ) VALUES (?, ?, ?, 'edit', ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          entryId,
-          adminId,
-          admin?.full_name || 'Unknown',
-          reason,
-          original.clock_in_time,
-          original.clock_out_time,
-          original.total_hours,
-          clockInTime,
-          clockOutTime,
-          totalHours,
-        ]
+      await logEntryChange(
+        db, entryId, req.user, "edit", reason || "Time correction",
+        { clockIn: original.clock_in_time, clockOut: original.clock_out_time, totalHours: original.total_hours },
+        { clockIn: times.clockIn, clockOut: times.clockOut, totalHours }
+      );
+
+      await tellEmployee(
+        db, req, original, `${await managerName(db, req.user)} changed your time`,
+        `${shiftText(original.clock_in_time, original.clock_out_time, original.break_minutes)} is now ${shiftText(times.clockIn, times.clockOut, times.breakMinutes)}${reason ? `. Reason: ${reason}` : ""}`
       );
 
       res.json({
         success: true,
         message: "Entry updated",
-        totalHours: totalHours.toFixed(2),
+        totalHours: stillClockedIn ? null : totalHours.toFixed(2),
       });
-    });
+    }));
   } catch (error) {
     console.error("Edit entry error:", error);
     res.status(500).json({
@@ -792,24 +1005,122 @@ router.put("/admin/edit-entry/:id", authenticateUser, isAdminOrSuperAdmin, async
   }
 });
 
-// POST /api/admin/timeclock/approve-entry/:id - Approve edited entry
+// GET /api/admin/timeclock/pending-entries - Employee entries and changes waiting on a manager
+router.get("/admin/pending-entries", authenticateUser, isAdminOrSuperAdmin, async (req, res) => {
+  try {
+    await withDb(async (db) => {
+      const rows = await db.all(
+        `SELECT * FROM time_clock_entries
+         WHERE is_deleted = 0 AND (status = 'pending' OR pending_changes IS NOT NULL)
+         ORDER BY clock_in_time DESC`
+      );
+
+      const entries = rows.map((row) => {
+        const changes = row.pending_changes ? JSON.parse(row.pending_changes) : null;
+        return { ...row, pending_changes: changes, action: changes?.action || "new" };
+      });
+
+      res.json({ success: true, entries });
+    });
+  } catch (error) {
+    console.error("Get pending entries error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to get pending entries",
+      error: error.message,
+    });
+  }
+});
+
+// POST /api/admin/timeclock/approve-entry/:id - Approve an entry and apply any waiting change
 router.post("/admin/approve-entry/:id", authenticateUser, isAdminOrSuperAdmin, async (req, res) => {
   try {
     const entryId = req.params.id;
 
-    await withDb(async (db) => {
-      await db.run(
-        `UPDATE time_clock_entries 
-         SET status = 'approved', updated_at = CURRENT_TIMESTAMP
-         WHERE id = ? AND is_deleted = 0`,
+    await oneAtATime(() => withDb(async (db) => {
+      const entry = await db.get(
+        `SELECT * FROM time_clock_entries WHERE id = ? AND is_deleted = 0`,
         [entryId]
+      );
+
+      if (!entry) {
+        return res.status(404).json({
+          success: false,
+          message: "Entry not found",
+        });
+      }
+
+      const changes = entry.pending_changes ? JSON.parse(entry.pending_changes) : null;
+      const before = {
+        clockIn: entry.clock_in_time,
+        clockOut: entry.clock_out_time,
+        totalHours: entry.total_hours,
+      };
+
+      if (changes?.action === "delete") {
+        await db.run(
+          `UPDATE time_clock_entries
+           SET is_deleted = 1, pending_changes = NULL, updated_at = CURRENT_TIMESTAMP
+           WHERE id = ?`,
+          [entryId]
+        );
+        await recalcWeek(db, entry.employee_id, entry.clock_in_time);
+        await logEntryChange(db, entryId, req.user, "delete", "Approved employee's delete request", before);
+        await tellEmployee(
+          db, req, entry, "Your delete request was approved",
+          shiftText(entry.clock_in_time, entry.clock_out_time, entry.break_minutes)
+        );
+        return res.json({ success: true, message: "Entry deleted" });
+      }
+
+      const clockIn = changes?.clockIn || entry.clock_in_time;
+      const clockOut = changes?.clockOut || entry.clock_out_time;
+      const breakMinutes = changes ? changes.breakMinutes : entry.break_minutes;
+
+      const overlap = await findOverlap(db, entry.employee_id, clockIn, clockOut, entry.id);
+      if (overlap) {
+        return res.status(400).json({ success: false, message: overlapMessage(overlap) });
+      }
+
+      const totalHours = clockOut ? calculateHours(clockIn, clockOut, breakMinutes) : null;
+
+      await db.run(
+        `UPDATE time_clock_entries
+         SET clock_in_time = ?, clock_out_time = ?, total_hours = ?, break_minutes = ?,
+             original_clock_in = ?, original_clock_out = ?,
+             modification_count = modification_count + ?,
+             entry_method = ?, notes = ?, status = ?, pending_changes = NULL,
+             edited_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?`,
+        [
+          clockIn,
+          clockOut,
+          totalHours,
+          breakMinutes,
+          changes ? entry.original_clock_in || entry.clock_in_time : entry.original_clock_in,
+          changes ? entry.original_clock_out || entry.clock_out_time : entry.original_clock_out,
+          changes ? 1 : 0,
+          changes ? "edited" : entry.entry_method,
+          changes ? changes.notes : entry.notes,
+          clockOut ? "approved" : "active",
+          entryId,
+        ]
+      );
+
+      await recalcWeek(db, entry.employee_id, entry.clock_in_time);
+      await recalcWeek(db, entry.employee_id, clockIn);
+      await logEntryChange(
+        db, entryId, req.user, "approve", "Approved", before, { clockIn, clockOut, totalHours }
+      );
+      await tellEmployee(
+        db, req, entry, "Your time was approved", shiftText(clockIn, clockOut, breakMinutes)
       );
 
       res.json({
         success: true,
         message: "Entry approved",
       });
-    });
+    }));
   } catch (error) {
     console.error("Approve entry error:", error);
     res.status(500).json({
@@ -820,11 +1131,56 @@ router.post("/admin/approve-entry/:id", authenticateUser, isAdminOrSuperAdmin, a
   }
 });
 
-// DELETE /api/admin/timeclock/delete-entry/:id - Soft delete entry
-router.delete("/admin/delete-entry/:id", authenticateUser, isAdminOrSuperAdmin, async (req, res) => {
+// POST /api/admin/timeclock/reject-entry/:id - Turn down a waiting entry or change
+router.post("/admin/reject-entry/:id", authenticateUser, isAdminOrSuperAdmin, async (req, res) => {
   try {
     const entryId = req.params.id;
-    const adminId = req.user.id;
+    const reason = req.body?.reason || "Rejected";
+
+    await withDb(async (db) => {
+      const entry = await db.get(
+        `SELECT * FROM time_clock_entries
+         WHERE id = ? AND is_deleted = 0 AND (status = 'pending' OR pending_changes IS NOT NULL)`,
+        [entryId]
+      );
+
+      if (!entry) {
+        return res.status(404).json({
+          success: false,
+          message: "Nothing is waiting on this entry",
+        });
+      }
+
+      await db.run(
+        `UPDATE time_clock_entries
+         SET is_deleted = ?, pending_changes = NULL, updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?`,
+        [entry.status === "pending" ? 1 : 0, entryId]
+      );
+      await logEntryChange(db, entryId, req.user, "reject", reason);
+      await tellEmployee(
+        db, req, entry, "Your time was not approved",
+        `${shiftText(entry.clock_in_time, entry.clock_out_time, entry.break_minutes)}${reason === "Rejected" ? "" : `. Reason: ${reason}`}`
+      );
+
+      res.json({ success: true, message: "Rejected" });
+    });
+  } catch (error) {
+    console.error("Reject entry error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to reject entry",
+      error: error.message,
+    });
+  }
+});
+
+// DELETE /api/admin/timeclock/delete-entry/:id - Soft delete entry
+// Admins can delete any entry. An employee's delete waits for approval, unless the
+// entry was never approved in the first place
+router.delete("/admin/delete-entry/:id", authenticateUser, async (req, res) => {
+  try {
+    const entryId = req.params.id;
     // Accept `reason` from the request body or as a query parameter. Some
     // clients (notably certain mobile/axios configurations) may not include a
     // body for DELETE requests, which would make `req.body` undefined and
@@ -833,25 +1189,53 @@ router.delete("/admin/delete-entry/:id", authenticateUser, isAdminOrSuperAdmin, 
     const reason = bodyReason || req.query?.reason || 'Deleted by admin';
 
     await withDb(async (db) => {
-      // Get admin name
-      const admin = await db.get(
-        `SELECT full_name FROM users WHERE id = ?`,
-        [adminId]
+      const entry = await db.get(
+        `SELECT * FROM time_clock_entries WHERE id = ? AND is_deleted = 0`,
+        [entryId]
       );
+
+      if (!entry) {
+        return res.status(404).json({
+          success: false,
+          message: "Entry not found",
+        });
+      }
+
+      if (!canManageEntry(req.user, entry)) {
+        reportBlockedAttempt(req, `Tried to delete ${entry.employee_name}'s time`);
+        return res.status(403).json({
+          success: false,
+          message: "You can only change your own time entries",
+        });
+      }
+
+      if (!isAdminUser(req.user) && entry.status !== "pending") {
+        await db.run(
+          `UPDATE time_clock_entries SET pending_changes = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+          [JSON.stringify({ action: "delete" }), entryId]
+        );
+        await logEntryChange(db, entryId, req.user, "delete_request", reason);
+        await managers(
+          db, entry, "wants to delete an entry",
+          shiftText(entry.clock_in_time, entry.clock_out_time, entry.break_minutes)
+        );
+        return res.json({ success: true, message: "Sent for approval", pendingApproval: true });
+      }
 
       await db.run(
         `UPDATE time_clock_entries 
-         SET is_deleted = 1, updated_at = CURRENT_TIMESTAMP
+         SET is_deleted = 1, pending_changes = NULL, updated_at = CURRENT_TIMESTAMP
          WHERE id = ?`,
         [entryId]
       );
 
+      await recalcWeek(db, entry.employee_id, entry.clock_in_time);
+
       // Log deletion
-      await db.run(
-        `INSERT INTO time_entry_modifications (
-          time_entry_id, modified_by, modified_by_name, modification_type, reason
-        ) VALUES (?, ?, ?, 'delete', ?)`,
-        [entryId, adminId, admin?.full_name || 'Unknown', reason]
+      await logEntryChange(db, entryId, req.user, "delete", reason);
+      await tellEmployee(
+        db, req, entry, `${await managerName(db, req.user)} removed your time`,
+        `${shiftText(entry.clock_in_time, entry.clock_out_time, entry.break_minutes)}. Reason: ${reason}`
       );
 
       res.json({
@@ -920,6 +1304,19 @@ router.get("/admin/entry-audit/:id", authenticateUser, async (req, res) => {
     const entryId = req.params.id;
 
     await withDb(async (db) => {
+      const entry = await db.get(
+        `SELECT employee_id, employee_name FROM time_clock_entries WHERE id = ?`,
+        [entryId]
+      );
+
+      if (entry && !canManageEntry(req.user, entry)) {
+        reportBlockedAttempt(req, `Tried to read ${entry.employee_name}'s time history`);
+        return res.status(403).json({
+          success: false,
+          message: "You can only view your own time entries",
+        });
+      }
+
       const modifications = await db.all(
         `SELECT * FROM time_entry_modifications 
          WHERE time_entry_id = ? 

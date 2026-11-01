@@ -194,7 +194,7 @@ const EmployeeAuditModal = ({
                           fontWeight: 600,
                         }}
                       >
-                        {entry.total_hours.toFixed(7) || "0"}
+                        {entry.total_hours?.toFixed(7) || "0"}
                       </td>
                       <td
                         style={{

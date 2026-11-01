@@ -27,7 +27,8 @@ const testimonialSubmitLimiter = rateLimit({
 router.get("/", async (req, res) => {
   try {
     const testimonials = await testimonialDb.getAllTestimonials(true);
-    res.json(testimonials);
+    // This list is public, so it never carries how to reach the client
+    res.json(testimonials.map(({ client_email, token_id, ...testimonial }) => testimonial));
   } catch (error) {
     handleError(error, "Failed to get testimonials", res, 500);
   }

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Clock, Users, Calendar, FileEdit } from "lucide-react";
+import { Clock, Users, Calendar, FileEdit, LayoutDashboard } from "lucide-react";
 import { useLanguage } from "../../../contexts/LanguageContext";
 import {
   TIMEZONE,
@@ -59,6 +59,7 @@ const TimeClockManager = ({ token, API_BASE, user }) => {
   const [thisWeekHours, setThisWeekHours] = useState(0);
   const [lastWeekHours, setLastWeekHours] = useState(0);
   const [payPeriodHours, setPayPeriodHours] = useState(0);
+  const [payPeriodOvertime, setPayPeriodOvertime] = useState(0);
   const [editingEntry, setEditingEntry] = useState(null);
   const [editForm, setEditForm] = useState({
     clockInTime: "",
@@ -228,6 +229,12 @@ const TimeClockManager = ({ token, API_BASE, user }) => {
           0,
         );
         setPayPeriodHours(totalHours);
+        setPayPeriodOvertime(
+          data.entries.reduce(
+            (sum, entry) => sum + (parseFloat(entry.overtime_hours) || 0),
+            0,
+          ),
+        );
       }
     } catch (error) {
       console.error("Error fetching pay period hours:", error);
@@ -475,7 +482,13 @@ const TimeClockManager = ({ token, API_BASE, user }) => {
 
       const data = await response.json();
       if (data.success) {
-        alert(t("timeclock.time_entry_added_success"));
+        alert(
+          t(
+            data.pendingApproval
+              ? "timeclock.sent_for_approval"
+              : "timeclock.time_entry_added_success",
+          ),
+        );
         setShowEnterTimeModal(false);
         setManualEntry({
           date: getTodayPST(), // Reset to current PST date
@@ -490,7 +503,7 @@ const TimeClockManager = ({ token, API_BASE, user }) => {
         await fetchCurrentPeriod();
         await fetchMonthEntries(); // Always refresh calendar entries
       } else {
-        alert(data.message || t("timeclock.failed_add_time_entry"));
+        alert(data.message || data.error || t("timeclock.failed_add_time_entry"));
       }
     } catch (error) {
       console.error("Error adding manual entry:", error);
@@ -503,18 +516,21 @@ const TimeClockManager = ({ token, API_BASE, user }) => {
   const handleEditEntry = (entry) => {
     setEditingEntry(entry);
 
-    // Convert PST timestamps to local datetime-local format
-    // The datetime-local input expects local time in format: "YYYY-MM-DDTHH:mm"
-    const clockInDate = new Date(entry.clock_in_time + "Z"); // Add Z to treat as UTC, then convert
-    const clockOutDate = entry.clock_out_time
-      ? new Date(entry.clock_out_time + "Z")
-      : null;
+    // Stored times are already PST wall-clock, so only the format changes
+    // The datetime-local input expects the format: "YYYY-MM-DDTHH:mm"
+    const toInputValue = (time) => time.replace(" ", "T").slice(0, 16);
+
+    // Show a change that is still waiting on a manager, not the approved times
+    const waiting = entry.pending_changes ? JSON.parse(entry.pending_changes) : null;
+    const edit = waiting?.action === "edit" ? waiting : null;
+    const clockIn = edit ? edit.clockIn : entry.clock_in_time;
+    const clockOut = edit ? edit.clockOut : entry.clock_out_time;
 
     setEditForm({
-      clockInTime: clockInDate.toISOString().slice(0, 16),
-      clockOutTime: clockOutDate ? clockOutDate.toISOString().slice(0, 16) : "",
-      breakMinutes: entry.break_minutes || 0,
-      notes: entry.notes || "",
+      clockInTime: toInputValue(clockIn),
+      clockOutTime: clockOut ? toInputValue(clockOut) : "",
+      breakMinutes: edit ? edit.breakMinutes : entry.break_minutes || 0,
+      notes: (edit ? edit.notes : entry.notes) || "",
     });
 
     // Fetch audit log
@@ -568,7 +584,13 @@ const TimeClockManager = ({ token, API_BASE, user }) => {
 
       const data = await response.json();
       if (data.success) {
-        alert(t("timeclock.time_entry_updated_success"));
+        alert(
+          t(
+            data.pendingApproval
+              ? "timeclock.sent_for_approval"
+              : "timeclock.time_entry_updated_success",
+          ),
+        );
         setEditingEntry(null);
         await fetchWeeklyHours();
         await fetchCurrentPeriod();
@@ -576,7 +598,7 @@ const TimeClockManager = ({ token, API_BASE, user }) => {
           await fetchMonthEntries();
         }
       } else {
-        alert(data.message || t("timeclock.failed_update_entry"));
+        alert(data.message || data.error || t("timeclock.failed_update_entry"));
       }
     } catch (error) {
       console.error("Error updating entry:", error);
@@ -609,7 +631,13 @@ const TimeClockManager = ({ token, API_BASE, user }) => {
 
       const data = await response.json();
       if (data.success) {
-        alert(t("timeclock.time_entry_deleted_success"));
+        alert(
+          t(
+            data.pendingApproval
+              ? "timeclock.sent_for_approval"
+              : "timeclock.time_entry_deleted_success",
+          ),
+        );
         setEditingEntry(null);
         await fetchWeeklyHours();
         await fetchCurrentPeriod();
@@ -617,7 +645,7 @@ const TimeClockManager = ({ token, API_BASE, user }) => {
           await fetchMonthEntries();
         }
       } else {
-        alert(data.message || t("timeclock.failed_delete_entry"));
+        alert(data.message || data.error || t("timeclock.failed_delete_entry"));
       }
     } catch (error) {
       console.error("Error deleting entry:", error);
@@ -987,6 +1015,7 @@ const TimeClockManager = ({ token, API_BASE, user }) => {
               className="btn-calendar"
               onClick={() => setShowCalendar(false)}
             >
+              <LayoutDashboard size={16} style={{ verticalAlign: "-3px", marginRight: 6 }} />
               {t("timeclock.back_to_dashboard")}
             </button>
           )}
@@ -1123,6 +1152,7 @@ const TimeClockManager = ({ token, API_BASE, user }) => {
               <PayrollInfoDisplay
                 payrollInfo={payrollInfo}
                 payPeriodHours={payPeriodHours}
+                payPeriodOvertime={payPeriodOvertime}
                 employeeTaxRate={employeeTaxRate}
                 onOpenCalculator={() => setShowCalculator(true)}
                 t={t}
@@ -1175,6 +1205,7 @@ const TimeClockManager = ({ token, API_BASE, user }) => {
         setManualEntry={setManualEntry}
         onSubmit={handleManualEntrySubmit}
         onClose={closeManualEntryModal}
+        actionLoading={actionLoading}
         t={t}
       />
 
@@ -1182,6 +1213,7 @@ const TimeClockManager = ({ token, API_BASE, user }) => {
         show={showCalculator}
         payrollInfo={payrollInfo}
         payPeriodHours={payPeriodHours}
+        payPeriodOvertime={payPeriodOvertime}
         employeeTaxRate={employeeTaxRate}
         setEmployeeTaxRate={setEmployeeTaxRate}
         onSaveTaxRate={saveTaxRate}

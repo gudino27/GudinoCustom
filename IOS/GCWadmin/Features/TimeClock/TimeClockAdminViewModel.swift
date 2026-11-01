@@ -157,7 +157,7 @@ class TimeClockAdminViewModel: ObservableObject {
 
         } catch {
             print("❌ Failed to add manual entry: \(error)")
-            errorMessage = "Failed to add manual entry. Please try again."
+            errorMessage = error.localizedDescription
         }
 
         actionInProgress = false
@@ -384,7 +384,7 @@ class TimeClockAdminViewModel: ObservableObject {
             print("📊 Filtered \(filteredEntries.count) entries from \(allEntries.count) total entries")
 
             // Aggregate by employee
-            var employeeMap: [Int: (totalHours: Double, employeeName: String)] = [:]
+            var employeeMap: [Int: (totalHours: Double, overtimeHours: Double, employeeName: String)] = [:]
 
             for entry in filteredEntries {
                 guard let userId = entry.userId else { continue }
@@ -394,23 +394,24 @@ class TimeClockAdminViewModel: ObservableObject {
 
                 if var existing = employeeMap[userId] {
                     existing.totalHours += hours
+                    existing.overtimeHours += entry.overtimeHours ?? 0
                     employeeMap[userId] = existing
                 } else {
-                    employeeMap[userId] = (hours, employeeName)
+                    employeeMap[userId] = (hours, entry.overtimeHours ?? 0, employeeName)
                 }
             }
 
             // Calculate regular/OT split and estimated pay for each employee
             for (employeeId, empData) in employeeMap {
-                // Calculate regular and overtime hours
-                let regularHours = min(empData.totalHours, 40)
-                let overtimeHours = max(empData.totalHours - 40, 0)
+                // Overtime comes from the entries: past 40 hours in a Sunday-Saturday week
+                let overtimeHours = empData.overtimeHours
+                let regularHours = empData.totalHours - overtimeHours
 
                 // Get payroll info to calculate estimated pay
                 var estimatedPay: Double = 0
                 do {
                     if let payrollInfo = try await service.getEmployeePayrollInfo(employeeId: employeeId) {
-                        estimatedPay = service.calculatePayPeriodEarnings(payrollInfo: payrollInfo, hours: empData.totalHours)
+                        estimatedPay = service.calculatePayPeriodEarnings(payrollInfo: payrollInfo, hours: empData.totalHours, overtimeHours: overtimeHours)
                     } else {
                         print("⚠️ Employee \(employeeId) has no payroll info set up")
                     }

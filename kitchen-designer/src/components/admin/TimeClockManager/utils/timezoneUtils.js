@@ -15,11 +15,11 @@ export const formatTimePST = (dateTimeStr, formatStr = "h:mm A") => {
   let date;
   if (
     typeof dateTimeStr === "string" &&
-    dateTimeStr.match(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)
+    dateTimeStr.match(/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2})?$/)
   ) {
-    const parts = dateTimeStr.split(/[- :]/);
+    const parts = dateTimeStr.split(/[- :T]/);
     date = new Date(
-      Date.UTC(parts[0], parts[1] - 1, parts[2], parts[3], parts[4], parts[5])
+      Date.UTC(parts[0], parts[1] - 1, parts[2], parts[3], parts[4], parts[5] || 0)
     );
   } else {
     date = new Date(dateTimeStr);
@@ -38,12 +38,12 @@ export const formatDatePST = (dateTimeStr) => {
   let date;
   if (
     typeof dateTimeStr === "string" &&
-    dateTimeStr.match(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)
+    dateTimeStr.match(/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2})?$/)
   ) {
     // Database format: "2025-10-19 18:08:00" - this IS the PST time
-    const parts = dateTimeStr.split(/[- :]/);
+    const parts = dateTimeStr.split(/[- :T]/);
     date = new Date(
-      Date.UTC(parts[0], parts[1] - 1, parts[2], parts[3], parts[4], parts[5])
+      Date.UTC(parts[0], parts[1] - 1, parts[2], parts[3], parts[4], parts[5] || 0)
     );
   } else if (
     typeof dateTimeStr === "string" &&
@@ -70,11 +70,11 @@ export const formatDateTimePST = (dateTimeStr) => {
   let date;
   if (
     typeof dateTimeStr === "string" &&
-    dateTimeStr.match(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)
+    dateTimeStr.match(/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2})?$/)
   ) {
-    const parts = dateTimeStr.split(/[- :]/);
+    const parts = dateTimeStr.split(/[- :T]/);
     date = new Date(
-      Date.UTC(parts[0], parts[1] - 1, parts[2], parts[3], parts[4], parts[5])
+      Date.UTC(parts[0], parts[1] - 1, parts[2], parts[3], parts[4], parts[5] || 0)
     );
   } else {
     date = new Date(dateTimeStr);

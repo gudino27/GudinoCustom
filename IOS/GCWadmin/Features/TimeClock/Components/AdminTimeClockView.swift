@@ -30,6 +30,8 @@ struct AdminTimeClockView: View {
                 // Hours Report Button
                 hoursReportButton
 
+                EmployeeTimeEditorSection(viewModel: viewModel)
+
                 // Currently Clocked In Section
                 currentlyClockedInSection
 

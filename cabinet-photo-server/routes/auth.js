@@ -177,8 +177,13 @@ router.post("/forgot-password", passwordResetLimiter, async (req, res) => {
           </div>
         `,
       };
-      await emailTransporter.sendMail(mailOptions);
-      console.log(`Password reset email sent to ${email}`);
+      // A send failure must look the same as an unknown email
+      try {
+        await emailTransporter.sendMail(mailOptions);
+        console.log(`Password reset email sent to ${email}`);
+      } catch (mailError) {
+        console.error("Password reset email failed:", mailError.message);
+      }
     }
     // Always return success message
     res.json({

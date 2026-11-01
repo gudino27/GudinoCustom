@@ -4,6 +4,7 @@
 
 // REQUIRED IMPORTS
 const multer = require("multer");
+const { isSafeUpload } = require("../utils/safe-upload");
 const path = require("path");
 const fs = require("fs").promises;
 const sharp = require("sharp");
@@ -60,7 +61,7 @@ const upload = multer({
   storage,
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith("image/")) {
+    if (file.mimetype.startsWith("image/") && isSafeUpload(file.originalname)) {
       cb(null, true);
     } else {
       cb(new Error("Only images allowed"));
@@ -88,7 +89,7 @@ const uploadMedia = multer({
     ];
     const isAllowed = allowedTypes.some(type => file.mimetype.startsWith(type) || file.mimetype === type);
 
-    if (isAllowed) {
+    if (isAllowed && isSafeUpload(file.originalname)) {
       cb(null, true);
     } else {
       cb(new Error("Only images and videos (MP4, WebM, MOV, HEVC, M4V) are allowed"));

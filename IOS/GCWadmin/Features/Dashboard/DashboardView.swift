@@ -36,6 +36,7 @@ let dashboardSections: [DashboardSection] = [
     DashboardSection(id: "photos", title: "Photos", titleKey: "photos", icon: "photo", requiredRole: .admin),
     DashboardSection(id: "employees", title: "Employees", titleKey: "employees", icon: "person.badge.shield.checkmark", requiredRole: .admin),
     DashboardSection(id: "timeclock", title: "Time Clock", titleKey: "timeclock", icon: "clock", requiredRole: .employee),
+    DashboardSection(id: "notifications", title: "Notifications", titleKey: "notifications", icon: "bell", requiredRole: .employee),
     DashboardSection(id: "designs", title: "Designs", titleKey: "designs", icon: "doc.text", requiredRole: .admin),
     DashboardSection(id: "invoices", title: "Invoices", titleKey: "invoices", icon: "doc.plaintext", requiredRole: .admin),
     DashboardSection(id: "testimonials", title: "Testimonials", titleKey: "testimonials", icon: "quote.bubble", requiredRole: .admin),
@@ -195,6 +196,10 @@ struct DashboardView: View {
             }
         case "timeclock":
             TimeClockView()
+        case "notifications":
+            NavigationStack {
+                NotificationsView()
+            }
         case "designs":
             NavigationStack {
                 DesignManagementView()

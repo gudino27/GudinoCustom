@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
-import {Users,Clock,Coffee, FileText, BarChart3, Calendar, FileEdit } from 'lucide-react';
+import {Users,Clock,Coffee, FileText, BarChart3, Calendar, FileEdit, Briefcase, AlertTriangle } from 'lucide-react';
 import { formatTimePST, formatDatePST, getTodayPST } from '../utils/timezoneUtils';
 import HoursReportModal from '../modals/HoursReportModal';
 import EmployeeAuditModal from '../modals/EmployeeAuditModal';
+import PendingApprovals from './PendingApprovals';
+import EmployeeTimeEditor from './EmployeeTimeEditor';
 
 const AdminLiveView = ({ token, API_BASE, user, onSetPayroll, t }) => {
   const [liveEmployees, setLiveEmployees] = useState([]);
@@ -130,11 +132,14 @@ const AdminLiveView = ({ token, API_BASE, user, onSetPayroll, t }) => {
     }
 
     try {
-      const response = await fetch(`${API_BASE}/api/timeclock/admin/entries`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
+      const response = await fetch(
+        `${API_BASE}/api/timeclock/admin/entries?startDate=${reportStartDate}&endDate=${reportEndDate}&limit=100000`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
         },
-      });
+      );
       const data = await response.json();
 
       if (data.success) {
@@ -166,9 +171,11 @@ const AdminLiveView = ({ token, API_BASE, user, onSetPayroll, t }) => {
 
           const hours = parseFloat(entry.total_hours) || 0;
           employeeMap[employeeId].totalHours += hours;
+          employeeMap[employeeId].regularHours += parseFloat(entry.regular_hours) || 0;
+          employeeMap[employeeId].overtimeHours += parseFloat(entry.overtime_hours) || 0;
         });
 
-        // Calculate regular/OT split and pay for each employee
+        // Calculate pay for each employee
         const reportData = await Promise.all(
           Object.values(employeeMap).map(async (empData) => {
             // Fetch payroll info for this employee
@@ -182,10 +189,6 @@ const AdminLiveView = ({ token, API_BASE, user, onSetPayroll, t }) => {
 
             if (payrollData.success && payrollData.payrollInfo) {
               const payroll = payrollData.payrollInfo;
-
-              // Calculate regular and overtime hours
-              empData.regularHours = Math.min(empData.totalHours, 40);
-              empData.overtimeHours = Math.max(empData.totalHours - 40, 0);
 
               // Calculate estimated pay
               if (payroll.employment_type === "hourly") {
@@ -490,7 +493,7 @@ const AdminLiveView = ({ token, API_BASE, user, onSetPayroll, t }) => {
                   {formatTime(entry.clock_in_time)} to{" "}
                   {formatTime(entry.clock_out_time)}
                   <span style={{ color: "#6b7280", marginLeft: "0.5rem" }}>
-                    ({entry.total_hours} hrs)
+                    ({entry.total_hours ?? t("timeclock.waiting_for_approval")}{entry.total_hours != null && " hrs"})
                   </span>
                 </div>
               ))}
@@ -498,6 +501,17 @@ const AdminLiveView = ({ token, API_BASE, user, onSetPayroll, t }) => {
           </div>
         </div>
       )}
+
+      <PendingApprovals token={token} API_BASE={API_BASE} t={t} />
+
+      <EmployeeTimeEditor
+        token={token}
+        API_BASE={API_BASE}
+        employees={allEmployees.filter(
+          (employee) => user?.role === "super_admin" || employee.role !== "super_admin",
+        )}
+        t={t}
+      />
 
       {/* Hours Report Button */}
       <div className="admin-section" style={{ marginBottom: "1rem" }}>
@@ -628,9 +642,15 @@ const AdminLiveView = ({ token, API_BASE, user, onSetPayroll, t }) => {
                                   {t("timeclock.type")}:
                                 </span>
                                 <span className="value">
-                                  {payrollInfo.employment_type === "hourly"
-                                    ? ` ${t('timeclock.type_hourly')}`
-                                    : ` ${t('timeclock.type_salary')}`}
+                                  {payrollInfo.employment_type === "hourly" ? (
+                                    <>
+                                      {" "}<Clock size={14} style={{ verticalAlign: "-2px" }} /> {t('timeclock.type_hourly')}
+                                    </>
+                                  ) : (
+                                    <>
+                                      {" "}<Briefcase size={14} style={{ verticalAlign: "-2px" }} /> {t('timeclock.type_salary')}
+                                    </>
+                                  )}
                                 </span>
                               </div>
                               {payrollInfo.employment_type === "hourly" ? (
@@ -684,7 +704,7 @@ const AdminLiveView = ({ token, API_BASE, user, onSetPayroll, t }) => {
                             </div>
                           ) : (
                             <div className="no-payroll-info">
-                              <span className="warning-icon">⚠️</span>
+                              <AlertTriangle className="warning-icon" size={16} />
                               <span>{t("timeclock.no_payroll_info_set")}</span>
                             </div>
                           )}
